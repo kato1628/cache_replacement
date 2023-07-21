@@ -53,6 +53,7 @@ class Cache(object):
         self._cache_lines = {} 
         self._eviction_policy = eviction_policy
         self._cache_history = []
+        self._hit_rate_statistic = BernoulliProcessStatistic()
 
     def read(self, access: CacheAccess) -> tuple[CacheState, CacheDecision]:
         """Constructs.
@@ -76,7 +77,10 @@ class Cache(object):
         lines_to_evict, scores = self._eviction_policy(self._cache_lines)
 
         # The case of cache hit
-        if access.obj_id in self._cache_lines:
+        hit = access.obj_id in self._cache_lines
+        # Record cache hit/miss
+        self._hit_rate_statistic.trial(hit)
+        if hit:
             return cache_state, CacheDecision(False, scores)
 
         # The case of cache miss
@@ -118,4 +122,39 @@ class Cache(object):
             list(self._cache_lines.keys()),
             self._cache_history
         )
+
+    @property
+    def hit_rate_statistic(self):
+        """Returns the hit_rate_statistic provided to the constructor.
+
+        Returns:
+          - BernoulliProcessStatistic
+        """
+        return self._hit_rate_statistic
     
+class BernoulliProcessStatistic(object):
+
+    def __init__(self) -> None:
+        self.reset()
+
+    def trial(self, success) -> None:
+        self._trials += 1
+        if success:
+            self._successes += 1
+
+    @property
+    def num_trials(self) -> int:
+        return self._trials
+
+    @property
+    def num_successes(self) -> int:
+        return self._successes
+    
+    def success_rate(self) -> float:
+        if self.num_trials == 0:
+            raise ValueError("Success rate is undefined when num_trials is 0.")
+        return self.num_successes / self.num_trials
+
+    def reset(self) -> None:
+        self._successes = 0
+        self._trials = 0
