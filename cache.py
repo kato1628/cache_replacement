@@ -1,7 +1,7 @@
-import collections
+from collections import namedtuple, deque
 from eviction_policy import EvictionPolicy
 
-class CacheAccess(collections.namedtuple(
+class CacheAccess(namedtuple(
     "CacheAccess",
     ("time", "obj_id", "obj_size", "obj_type"))):
     """ A sigle access to a cache
@@ -14,7 +14,7 @@ class CacheAccess(collections.namedtuple(
     """
     pass
 
-class CacheState(collections.namedtuple(
+class CacheState(namedtuple(
     "CacheState",
     ("cache_access", "cache_lines", "cache_history"))):
     """ A cache state
@@ -26,7 +26,7 @@ class CacheState(collections.namedtuple(
     """
     pass
 
-class CacheDecision(collections.namedtuple(
+class CacheDecision(namedtuple(
     "CacheDecision",
     ("evict", "cache_line_scores"))):
     """ Information about which cache line was evicted for a Cache Access.
@@ -39,12 +39,14 @@ class CacheDecision(collections.namedtuple(
 
 class Cache(object):
     """ A cache object """
-    def __init__(self, capacity: int, eviction_policy: EvictionPolicy):
+    def __init__(self, capacity: int, eviction_policy: EvictionPolicy,
+                access_history_len=10000):
         """Constructs.
 
         Args:
-          capacity: Number of bytes to store in cache
-          eviction_policy: A policy to evict a cache line
+          - capacity: Number of bytes to store in cache
+          - eviction_policy: A policy to evict a cache line
+          - access_history_len: The length of history to keep
         """
         self._capacity = capacity
         # (Dict[int, int]) Dictionary for cache lines,
@@ -52,7 +54,7 @@ class Cache(object):
         # e.x. {1: 128, 2:256, 3: 512}
         self._cache_lines = {} 
         self._eviction_policy = eviction_policy
-        self._cache_history = []
+        self._cache_history = deque(maxlen=access_history_len)
         self._hit_rate_statistic = BernoulliProcessStatistic()
 
     def read(self, access: CacheAccess) -> tuple[CacheState, CacheDecision]:
