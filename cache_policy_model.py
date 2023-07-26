@@ -1,9 +1,12 @@
-from typing import List
 import torch
 import torch.nn as nn
+import numpy as np
+from itertools import chain
 
+from typing import List
 from cache import CacheState
 from embed import generate_embedder
+from utils import pad
 
 class CachePolicyModel(nn.Module):
 
@@ -11,7 +14,7 @@ class CachePolicyModel(nn.Module):
     def from_config(self, config) -> 'CachePolicyModel':
         obj_id_embedder = generate_embedder(config["obj_id_embedder"])
         obj_size_embedder = generate_embedder(config["obj_size_embedder"])
-        cache_lines_embedder = generate_embedder(config["cache_lines_embedder"])
+        cache_lines_embedder = obj_id_embedder
         cache_history_embedder = generate_embedder(config["cache_history_embedder"])
 
         return self(obj_id_embedder,
@@ -47,13 +50,31 @@ class CachePolicyModel(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, cache_states: List[CacheState]) -> torch.Tensor:
+        batch_size = len(cache_states)
+
         # Extract the cache access, cache lines, and cache history from the cache states
         cache_access, cache_lines, cache_history = zip(*cache_states)
 
-        # Embed the object indices in cache_lines and access_history
+        # Embed the obj_id and obj_size
+        # (batch_size, embedding_dim)
         obj_id_embedding = self._obj_id_embedder([access.obj_id for access in cache_access])
         obj_size_embedding = self._obj_size_embedder([access.obj_size for access in cache_access])
-        cache_lines_embedding = self._cache_lines_embedder(cache_lines)
+        
+        # Cache lines are padded to the same length for embedding layer
+        cache_lines, mask = pad(cache_lines, pad_token=-1, min_len=1)
+        cache_lines = np.array(cache_lines)
+        num_cache_lines = cache_lines.shape[1]
+
+        # Flatten cache_lines into a single list
+        cache_lines = chain.from_iterable(cache_lines)
+
+        # Embed the cache lines
+        # (batch_size, num_cache_lines, embedding_dim)
+        cache_lines_embedding = self._cache_lines_embedder(cache_lines).view(
+            batch_size,
+            num_cache_lines,
+            -1)
+
         cache_history_embedding = self._cache_history_embedder(cache_history)
 
         # Combine current_access, access_history, and embedded_cache_lines
