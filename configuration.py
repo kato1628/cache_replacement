@@ -7,10 +7,15 @@ config = {
         "max_examples": 500
     },
     "model": {
-        "cache_access_embedder": {
+        "obj_id_embedder": {
             "type": "dynamic_vocab",
-            "max_vocab_size": 100000,
-            "embedding_dim": 32,
+            "max_vocab_size": 10000,
+            "embedding_dim": 64,
+        },
+        "obj_size_embedder": {
+            "type": "dynamic_vocab",
+            "max_vocab_size": 5000,
+            "embedding_dim": 64,
         },
         "cache_lines_embedder": {
             "type": "dynamic_vocab",

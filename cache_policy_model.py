@@ -9,29 +9,33 @@ class CachePolicyModel(nn.Module):
 
     @classmethod
     def from_config(self, config) -> 'CachePolicyModel':
-        cache_access_embedder = generate_embedder(config["cache_access_embedder"])
+        obj_id_embedder = generate_embedder(config["obj_id_embedder"])
+        obj_size_embedder = generate_embedder(config["obj_size_embedder"])
         cache_lines_embedder = generate_embedder(config["cache_lines_embedder"])
         cache_history_embedder = generate_embedder(config["cache_history_embedder"])
 
-        return self(cache_access_embedder,
+        return self(obj_id_embedder,
+                    obj_size_embedder,
                     cache_lines_embedder,
                     cache_history_embedder,
                     config["num_heads"],
                     config["num_layers"])
 
     def __init__(self,
-                 cache_access_embedder,
+                 obj_id_embedder,
+                 obj_size_embedder,
                  cache_lines_embedder,
                  cache_history_embedder,
                  num_heads,
                  num_layers):
         super(CachePolicyModel, self).__init__()
 
-        self._cache_access_embedder = cache_access_embedder
+        self._obj_id_embedder = obj_id_embedder
+        self._obj_size_embedder = obj_size_embedder
         self._cache_lines_embedder = cache_lines_embedder
         self._cache_history_embedder = cache_history_embedder
 
-        d_model = cache_access_embedder.embedding_dim + cache_lines_embedder.embedding_dim + cache_history_embedder.embedding_dim
+        d_model = obj_id_embedder.embedding_dim + obj_size_embedder.embedding_dim + cache_lines_embedder.embedding_dim + cache_history_embedder.embedding_dim
         self.transformer = nn.Transformer(d_model=d_model,
                                           nhead=num_heads,
                                           num_encoder_layers=num_layers,
@@ -47,12 +51,14 @@ class CachePolicyModel(nn.Module):
         cache_access, cache_lines, cache_history = zip(*cache_states)
 
         # Embed the object indices in cache_lines and access_history
-        cache_access_embedding = self._cache_access_embedder([access.obj_id for access in cache_access])
+        obj_id_embedding = self._obj_id_embedder([access.obj_id for access in cache_access])
+        obj_size_embedding = self._obj_size_embedder([access.obj_size for access in cache_access])
         cache_lines_embedding = self._cache_lines_embedder(cache_lines)
         cache_history_embedding = self._cache_history_embedder(cache_history)
 
         # Combine current_access, access_history, and embedded_cache_lines
-        combined_input = torch.cat((cache_access_embedding,
+        combined_input = torch.cat((obj_id_embedding,
+                                    obj_size_embedding,
                                     cache_lines_embedding,
                                     cache_history_embedding),
                                     dim=2)
