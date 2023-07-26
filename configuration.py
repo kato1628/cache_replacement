@@ -4,15 +4,24 @@ config = {
         "window_size": 100000,
         "capacity": 1000000000,
         "access_history_len": 10000,
-        "max_examples": 5000
+        "max_examples": 500
     },
     "model": {
-        "max_cache_access_vocab": 100000,
-        "cache_access_embedding_dim": 32,
-        "max_cache_lines_vocab": 100000,
-        "cache_lines_embedding_dim": 128,
-        "max_cache_history_vocab": 100000,
-        "cache_history_embedding_dim": 128,
+        "cache_access_embedder": {
+            "type": "dynamic_vocab",
+            "max_vocab_size": 100000,
+            "embedding_dim": 32,
+        },
+        "cache_lines_embedder": {
+            "type": "dynamic_vocab",
+            "max_vocab_size": 100000,
+            "embedding_dim": 128,
+        },
+        "cache_history_embedder": {
+            "type": "dynamic_vocab",
+            "max_vocab_size": 100000,
+            "embedding_dim": 128,
+        },
         "num_heads": 8,
         "num_layers": 6,
     },
