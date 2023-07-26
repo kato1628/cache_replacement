@@ -1,50 +1,43 @@
-import tqdm
-from cache import Cache, CacheAccess
-from eviction_policy import BeladyScorer, GreedyEvictionPolicy
-from wiki_trace import WikiTrace
+import torch.optim as optim
+from cache_policy_model import CachePolicyModel
+from configuration import config
+from generator import train_data_generator
 
-# Dataset configuration
-FILE_DIR = './dataset/'
-FILENAME = 'wiki2018_dev.tr'
-TRACE_FILE_PATH = f'{FILE_DIR}{FILENAME}'
+# Create training datasets generator
+training_datasets = train_data_generator(config["dataset"])
 
-# Cache configuration
-WINDOW_SIZE = 100000
-CAPACITY = 1000000000
-ACCESS_HISTORY_LEN = 10000
+# Initialize the model and optimizer
+model = CachePolicyModel.from_config(config["model"])
+optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
 
-# Training configuration
-MAX_EXAMPLES = 5000
+# Train the model
+for dataset in training_datasets:
+    batch_size = config["training"]["batch_size"]
+    
+    # Chop up the dataset into batches
+    subseq_length = len(dataset) // batch_size
+    # (batch_size, subseq_length)
+    batches = [
+      dataset[i * subseq_length: (i+1) * subseq_length] for i in range(batch_size)
+    ]
 
-def generate_training_data(trace_file_path: str = TRACE_FILE_PATH,
-                           window_size: int = WINDOW_SIZE,
-                           capacity: int = CAPACITY,
-                           access_history_len: int = ACCESS_HISTORY_LEN,
-                           max_examples: int = MAX_EXAMPLES):
-    """
-    Generates training data from the trace file.
-    """
-    with WikiTrace(trace_file_path, max_look_ahead=window_size) as trace:
-        scorer = BeladyScorer(trace)
-        eviction_policy = GreedyEvictionPolicy(scorer)
-        cache = Cache(capacity, eviction_policy, access_history_len)
+    for batch in batches:
+        print("Training...")
+        optimizer.zero_grad()
+        cache_states, cache_decisions = zip(*batch)
+        # output = model(cache_states)
 
-        with tqdm.tqdm(total=100000) as pbar:
-            while not trace.done():
-                train_data = []
-                cache.hit_rate_statistic.reset()
+        # loss = model.loss(output, cache_decision)
+        # loss.backward()
+        # optimizer.step()
 
-                while len(train_data) <= max_examples and not trace.done():
-                    time, obj_id, obj_size, obj_type = trace.next()
-                    access = CacheAccess(time, obj_id, obj_size, obj_type)
-                    cache_state, cache_decision = cache.read(access)
-                    train_data.append((cache_state, cache_decision))
-                    pbar.update(1)
-
-                print("Cache hit rate:", cache.hit_rate_statistic.success_rate())
-                yield train_data
-
-
-train_data_generator = generate_training_data()
-for train_data in train_data_generator:
-    print("Generating training data...")
+    # print("Generating training data...")
+    # for cache_state, cache_decision in dataset:
+    #     print("Training...")
+    #     optimizer.zero_grad()
+        # output = model(cache_state.cache_access,
+        #                cache_state.cache_lines,
+        #                cache_state.cache_history)
+        # loss = model.loss(output, cache_decision)
+        # loss.backward()
+        # optimizer.step()
