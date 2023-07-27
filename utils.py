@@ -33,3 +33,22 @@ def pad(seq_batch: List[List[object]],
             mask[i, -padding:] = 0
     
     return padded, mask
+
+def mask_renormalize(probs : torch.FloatTensor, mask: torch.ByteTensor) -> torch.FloatTensor:
+    """Renormalizes probs with a mask so that the unmasked entries sum to 1.
+    
+    Args:
+        probs (torch.FloatTensor): batch of probability distributions with shape 
+          (batch_dim1, batch_dim2, ..., num_elements).
+        mask (torch.ByteTensor): masks out elements if the value is 0.
+
+    Returns:
+        renormalized_probs (torch.FloatTensor): the tensor of same shape as probs.
+          Each batch row (last dim) sums to 1, where masked entries have value 0.
+          If all entries in a row are masked, the batch row sums to 0.
+    """
+    # Set masked entries to 0
+    masked_probs = probs * mask.float()
+    # Renormalize the unmasked entries
+    renormalized_probs = masked_probs / (masked_probs.sum(dim=-1, keepdim=True) + 1e-8)
+    return renormalized_probs
