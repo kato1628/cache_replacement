@@ -6,6 +6,7 @@ from itertools import chain
 from typing import List
 from cache import CacheState
 from embed import generate_embedder
+from loss_function import ReuseDistanceLoss
 from utils import pad
 
 class CachePolicyModel(nn.Module):
@@ -23,10 +24,14 @@ class CachePolicyModel(nn.Module):
         
         cache_history_embedder = generate_embedder(config["cache_history_embedder"])
 
+        # Generate loss function
+        loss_function = ReuseDistanceLoss()
+
         return self(obj_id_embedder,
                     obj_size_embedder,
                     cache_lines_embedder,
                     cache_history_embedder,
+                    loss_function,
                     config["num_heads"],
                     config["num_layers"])
 
@@ -35,6 +40,7 @@ class CachePolicyModel(nn.Module):
                  obj_size_embedder,
                  cache_lines_embedder,
                  cache_history_embedder,
+                 loss_function,
                  num_heads,
                  num_layers):
         super(CachePolicyModel, self).__init__()
@@ -43,6 +49,7 @@ class CachePolicyModel(nn.Module):
         self._obj_size_embedder = obj_size_embedder
         self._cache_lines_embedder = cache_lines_embedder
         self._cache_history_embedder = cache_history_embedder
+        self._loss_function = loss_function
 
         d_model = obj_id_embedder.embedding_dim + obj_size_embedder.embedding_dim + cache_lines_embedder.embedding_dim + cache_history_embedder.embedding_dim
         self.transformer = nn.Transformer(d_model=d_model,
