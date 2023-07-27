@@ -67,3 +67,57 @@ class Attention(nn.Module):
               with the shape of (batch_size, 1, num_cells).
         """
         raise NotImplementedError
+
+class GeneralAttention(Attention):
+    """Score(q, k) = q.T W k. W is learned. (Luong et al., 2015)"""
+
+    def __init__(self, query_dim: int,
+                 memory_key_dim: int,
+                 weight_initializer: callable = nn.init.xavier_uniform):
+        """Constructs.
+        
+        Args:
+            query_dim (int): the dimension of the queries.
+            memory_key_dim (int): the dimension of the memory keys.
+            weight_initializer (callable): the initializer for the weight matrix.
+              Default is xavier uniform.
+        """
+        super().__init__()
+
+        # Initialize the weight matrix
+        # (query_dim, memory_key_dim)
+        w = torch.zeros(query_dim, memory_key_dim)
+        weight_initializer(w)
+        self._w = nn.Parameter(w)
+
+    def _score(self, queries: torch.FloatTensor, memory_keys: torch.FloatTensor) -> torch.FloatTensor:
+        """Computes the score between the queries and memory keys.
+
+        Args:
+            queries (torch.FloatTensor): the queries with the shape of 
+              (batch_size, query_dim).
+            memory_keys (torch.FloatTensor): the memory keys with the shape of 
+              (batch_size, num_cells, key_dim).
+
+        Returns:
+            torch.FloatTensor: the score between the queries and memory keys
+              with the shape of (batch_size, 1, num_cells).
+        """
+        
+        # add a extra dimension to queries
+        # (batch_size, query_dim) to (batch_size, 1, query_dim)
+        queries = queries.unsqueeze(1)
+
+        # swap the last two dimensions of memory_keys
+        # (batch_size, num_cells, key_dim) to (batch_size, key_dim, num_cells)
+        memory_keys = memory_keys.transpose(1, 2)
+
+        # (batch_size, 1, query_dim) * (batch_size, key_dim, num_cells)
+        #   -> (batch_size, 1, num_cells)
+        transformed_queries = torch.matmul(queries, self._w) # matrix multiplication
+        
+        # (batch_size, 1, num_cells) * (batch_size, num_cells, key_dim)
+        #   -> (batch_size, 1, key_dim)
+        scores = torch.bmm(transformed_queries, memory_keys)
+
+        return scores
