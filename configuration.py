@@ -22,8 +22,7 @@ config = {
             "type": "positional",
             "embedding_dim": 128,
         },
-        "num_heads": 8,
-        "num_layers": 6,
+        "lstm_hidden_size": 128,
     },
     "training": {
         "learning_rate": 0.001,
