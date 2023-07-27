@@ -12,9 +12,15 @@ class CachePolicyModel(nn.Module):
 
     @classmethod
     def from_config(self, config) -> 'CachePolicyModel':
+        # Generate the embedders
         obj_id_embedder = generate_embedder(config["obj_id_embedder"])
         obj_size_embedder = generate_embedder(config["obj_size_embedder"])
-        cache_lines_embedder = obj_id_embedder
+
+        if config["cache_lines_embedder"] == "obj_id_embedder":
+            cache_lines_embedder = obj_id_embedder
+        else:
+            cache_lines_embedder = generate_embedder(config["cache_lines_embedder"])
+        
         cache_history_embedder = generate_embedder(config["cache_history_embedder"])
 
         return self(obj_id_embedder,

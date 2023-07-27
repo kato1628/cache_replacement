@@ -15,6 +15,8 @@ def generate_embedder(embedder_config: dict) -> nn.Module:
     if embedder_config["type"] == "dynamic_vocab":
         return DynamicVocabEmbedder(embedder_config["embedding_dim"],
                                     embedder_config["max_vocab_size"])
+    elif embedder_config["type"] == "positional":
+        return PositionalEmbedder(embedder_config["embedding_dim"])
     else:
         raise ValueError(f"Unknown embedder type: {embedder_config['type']}")
 
@@ -81,3 +83,33 @@ class DynamicVocabEmbedder(Embedder):
         indices = torch.tensor([input_to_index(input) for input in inputs]).long()
 
         return self._embedding(indices)
+
+class PositionalEmbedder(Embedder):
+    """Takes position index as input and outputs a simple fixed embedding."""
+
+    def forward(self, position_indices):
+        """Returns a fixed embedding for each position index.
+        
+        Embeds each position index into Vaswani et al.'s transformer positional embedding space.
+          embed_{2i}(pos) = sin(pos / 10000^(2i/embed_dim))
+          embed_{2i+1}(pos) = cos(pos / 10000^(2i/embed_dim))
+
+        Args:
+            position_indices (list[int]): a batch of position indices.
+
+        Returns:
+            embeddings (torch.FloatTensor): the embeddings of the position indices with shape
+            (batch_size, embedding_dim).
+        """
+        batch_size = len(position_indices)
+
+        # i's in above formula
+        embed_indices = torch.arange(self.embedding_dim).expand(batch_size, -1).float()
+        position_tensor = torch.tensor(position_indices).unsqueeze(-1).float()
+
+        embedding = position_tensor / 10000. ** (2 * embed_indices / self.embedding_dim)
+        embedding = torch.where(embed_indices % 2 == 0,
+                                torch.sin(embedding),
+                                torch.cos(embedding))
+
+        return embedding

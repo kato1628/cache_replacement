@@ -17,14 +17,9 @@ config = {
             "max_vocab_size": 5000,
             "embedding_dim": 64,
         },
-        "cache_lines_embedder": {
-            "type": "dynamic_vocab",
-            "max_vocab_size": 100000,
-            "embedding_dim": 128,
-        },
+        "cache_lines_embedder": "obj_id_embedder",
         "cache_history_embedder": {
-            "type": "dynamic_vocab",
-            "max_vocab_size": 100000,
+            "type": "positional",
             "embedding_dim": 128,
         },
         "num_heads": 8,
