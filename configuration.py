@@ -18,7 +18,7 @@ config = {
             "embedding_dim": 64,
         },
         "cache_lines_embedder": "obj_id_embedder",
-        "cache_history_embedder": {
+        "positional_embedder": {
             "type": "positional",
             "embedding_dim": 128,
         },

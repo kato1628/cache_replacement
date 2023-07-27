@@ -3,13 +3,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 from itertools import chain
-
+from cache import CacheState
+from torch.nn import functional as F
 from typing import List, Optional
 from attension import GeneralAttention, MultiQueryAttention
-from cache import CacheState
-from embed import generate_embedder
 from loss_function import ReuseDistanceLoss
-from utils import pad
+from embed import generate_embedder
+from utils import pad, mask_renormalize
 
 class CachePolicyModel(nn.Module):
 
@@ -24,7 +24,7 @@ class CachePolicyModel(nn.Module):
         else:
             cache_lines_embedder = generate_embedder(config["cache_lines_embedder"])
         
-        cache_history_embedder = generate_embedder(config["cache_history_embedder"])
+        positional_embedder = generate_embedder(config["positional_embedder"])
 
         # Generate loss function
         loss_function = ReuseDistanceLoss()
@@ -32,7 +32,7 @@ class CachePolicyModel(nn.Module):
         return self(obj_id_embedder,
                     obj_size_embedder,
                     cache_lines_embedder,
-                    cache_history_embedder,
+                    positional_embedder,
                     loss_function,
                     config["lstm_hidden_size"],
                     config["max_attention_history"])
@@ -41,7 +41,7 @@ class CachePolicyModel(nn.Module):
                  obj_id_embedder: nn.Embedding,
                  obj_size_embedder: nn.Embedding,
                  cache_lines_embedder: nn.Embedding,
-                 cache_history_embedder: nn.Embedding,
+                 positional_embedder: nn.Embedding,
                  loss_function: nn.Module,
                  lstm_hidden_size: int,
                  max_attention_history: int):
@@ -51,7 +51,7 @@ class CachePolicyModel(nn.Module):
         self._obj_id_embedder = obj_id_embedder
         self._obj_size_embedder = obj_size_embedder
         self._cache_lines_embedder = cache_lines_embedder
-        self._cache_history_embedder = cache_history_embedder
+        self._positional_embedder = positional_embedder
 
         # LSTM layer
         self._lstm_cell = nn.LSTMCell(
@@ -67,11 +67,11 @@ class CachePolicyModel(nn.Module):
         # Linear layer
         # (lstm_hidden_size + cache_history_embedder.embedding_dim) -> 1
         self._cache_line_scorer = nn.Linear(
-            in_features=lstm_hidden_size + self._cache_history_embedder.embedding_dim,
+            in_features=lstm_hidden_size + self._positional_embedder.embedding_dim,
             out_features=1)
         # (lstm_hidden_size + cache_history_embedder.embedding_dim) -> 1
         self._reuse_distance_estimator = nn.Linear(
-            in_features=lstm_hidden_size + self._cache_history_embedder.embedding_dim,
+            in_features=lstm_hidden_size + self._positional_embedder.embedding_dim,
             out_features=1)
         
         # Needs to be capped to prevent memory explosion
@@ -81,7 +81,8 @@ class CachePolicyModel(nn.Module):
         self._loss_function = loss_function
 
     def forward(self, cache_states: List[CacheState],
-                prev_hidden_state: Optional[object] = None) -> torch.Tensor:
+                prev_hidden_state: Optional[object] = None,
+                inference=False) -> torch.Tensor:
         """Computes cache line to evict
         
             Each cache line in the cache state is scored by the model.
@@ -113,6 +114,23 @@ class CachePolicyModel(nn.Module):
         # (batch_size, embedding_dim)
         obj_id_embedding = self._obj_id_embedder([access.obj_id for access in cache_access])
         obj_size_embedding = self._obj_size_embedder([access.obj_size for access in cache_access])
+
+        # Concatenate the obj_id and obj_size embeddings
+        # (batch_size, hidden_size)
+        next_context, next_hidden_state = self._lstm_cell(
+            torch.cat([obj_id_embedding, obj_size_embedding], dim=-1),
+            hidden_state)
+
+        if inference:
+            next_context = next_context.detach()
+            next_hidden_state = next_hidden_state.detach()
+        
+        # Store the hidden state and cache state to history
+        # Do not modify history in place
+        hidden_state_history = hidden_state_history.copy()
+        hidden_state_history.append(next_hidden_state)
+        cache_states_history = cache_states_history.copy()
+        cache_states_history.append(cache_states)
         
         # Cache lines are padded to the same length for embedding layer
         cache_lines, mask = pad(cache_lines, pad_token=-1, min_len=1)
@@ -128,10 +146,34 @@ class CachePolicyModel(nn.Module):
             batch_size,
             num_cache_lines,
             -1)
+ 
+        # Generate Memory keys from hidden state history
+        history_tensor = torch.stack(list(hidden_state_history),dim=1)
+        # Generate Meomory values from positional embeddinges obtained from cache states history
+        potional_embeddings = self._positional_embedder(
+            list(range(len(hidden_state_history)))).expand(batch_size, -1, -1)
 
-        cache_history_embedding = self._cache_history_embedder(cache_history)
+        # Compute the attention weights and context vectors
+        # (batch_size, num_cache_lines, num_cells), (batch_size, num_cache_lines, value_dim)
+        attention_weights, contexts = self._history_attention(
+            history_tensor,
+            torch.cat((history_tensor, potional_embeddings), dim=-1),
+            cache_lines_embedding)
+        
+        # Compute the scores
+        # (batch_size, num_cache_lines, value_dim) -> (batch_size, num_cache_lines)
+        scores = F.softmax(self._cache_line_scorer(contexts).squeeze(-1), dim=-1)
+        probs = mask_renormalize(scores, mask)
 
-        return
+        # Compute the reuse distance
+        # (batch_size, num_cache_lines, value_dim) -> (batch_size, num_cache_lines)
+        pred_reuse_distances = self._reuse_distance_estimator(contexts).squeeze(-1)
+
+        next_hidden_state = ((next_context, next_hidden_state),
+                             hidden_state_history,
+                             cache_states_history)
+        
+        return probs, pred_reuse_distances, next_hidden_state
 
     def _initial_hidden_state(self, batch_size: int) -> tuple[tuple[torch.FloatTensor,torch.FloatTensor],
                                                               collections.deque[torch.FloatTensor],

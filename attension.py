@@ -22,7 +22,7 @@ class Attention(nn.Module):
     def forward(self, memory_keys: torch.FloatTensor,
                 memory_values: torch.FloatTensor,
                 queries: torch.FloatTensor,
-                mask: torch.ByteTensor) -> torch.FloatTensor:
+                masks: torch.ByteTensor) -> torch.FloatTensor:
         """Computes the context vector.
 
         Args:
@@ -32,15 +32,15 @@ class Attention(nn.Module):
               of (batch_size, num_cells, value_dim).
             queries (torch.FloatTensor): the queries with the shape of 
               (batch_size, query_dim).
-            mask (torch.ByteTensor): masks out elements if the value is 0 with
+            masks (torch.ByteTensor): masks out elements if the value is 0 with
                 the shape of (batch_size, num_cells).
 
         Returns:
             torch.FloatTensor: the context vector with the shape of (batch_size, value_dim).
         """
-        if mask is None:
-            mask = torch.ones(memory_keys.shape[0], memory_keys.shape[1])
-        masks = mask.unsqueeze(1)
+        if masks is None:
+            masks = torch.ones(memory_keys.shape[0], memory_keys.shape[1])
+        masks = masks.unsqueeze(1)
 
         # Compute the attention weights
         # (batch_size, 1, num_cells)
@@ -133,12 +133,12 @@ class MultiQueryAttention(nn.Module):
       queries: (batch_size, num_queries, query_dim)
       values: (batch_size, num_cells, value_dim)
       keys: (batch_size, num_cells, key_dim)
-      mask: (batch_size, num_cells)
+      masks: (batch_size, num_cells)
 
       attention_weights = []
       contexts = []
       for query in queries:
-        attention_weight, context = base_attention(keys, values, query, mask)
+        attention_weight, context = base_attention(keys, values, query, masks)
         attention_weights.append(attention_weight)
         contexts.append(context)
     
@@ -158,7 +158,7 @@ class MultiQueryAttention(nn.Module):
     def forward(self, memory_keys: torch.FloatTensor,
                 memory_values: torch.FloatTensor,
                 queries: torch.FloatTensor,
-                mask: torch.ByteTensor) -> tuple[torch.FloatTensor, torch.FloatTensor]:
+                masks: torch.ByteTensor = None) -> tuple[torch.FloatTensor, torch.FloatTensor]:
         """Computes attention weights and context vectors for each query.
         
         Args:
@@ -184,8 +184,8 @@ class MultiQueryAttention(nn.Module):
         num_queries = queries.shape[1]
         num_cells = memory_keys.shape[1]
 
-        if mask is None:
-            mask = torch.ones(batch_size, num_cells)
+        if masks is None:
+            masks = torch.ones(batch_size, num_cells)
 
         memory_keys = memory_keys.repeat(1, num_queries, 1).view(
             batch_size * num_queries,
@@ -193,7 +193,7 @@ class MultiQueryAttention(nn.Module):
         memory_values = memory_values.repeat(1, num_queries, 1).view(
             batch_size * num_queries,
             num_cells, -1)
-        mask = mask.repeat(1, num_queries).view(
+        masks = masks.repeat(1, num_queries).view(
             batch_size * num_queries,
             num_cells)
         
@@ -203,7 +203,7 @@ class MultiQueryAttention(nn.Module):
             memory_keys,
             memory_values,
             queries.view(-1, queries.shape[-1]),
-            mask)
+            masks)
         
         # Reshape the attention weights and contexts
         # (batch_size * num_queries, num_cells) -> (batch_size, num_queries, num_cells)
