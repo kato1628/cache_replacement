@@ -23,6 +23,7 @@ config = {
             "embedding_dim": 128,
         },
         "lstm_hidden_size": 128,
+        "max_attention_history": 50,
     },
     "training": {
         "learning_rate": 0.001,

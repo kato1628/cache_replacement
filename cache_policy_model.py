@@ -4,6 +4,7 @@ import numpy as np
 from itertools import chain
 
 from typing import List
+from attension import GeneralAttention, MultiQueryAttention
 from cache import CacheState
 from embed import generate_embedder
 from loss_function import ReuseDistanceLoss
@@ -32,15 +33,17 @@ class CachePolicyModel(nn.Module):
                     cache_lines_embedder,
                     cache_history_embedder,
                     loss_function,
-                    config["lstm_hidden_size"])
+                    config["lstm_hidden_size"],
+                    config["max_attention_history"])
 
     def __init__(self,
-                 obj_id_embedder,
-                 obj_size_embedder,
-                 cache_lines_embedder,
-                 cache_history_embedder,
-                 loss_function,
-                 lstm_hidden_size):
+                 obj_id_embedder: nn.Embedding,
+                 obj_size_embedder: nn.Embedding,
+                 cache_lines_embedder: nn.Embedding,
+                 cache_history_embedder: nn.Embedding,
+                 loss_function: nn.Module,
+                 lstm_hidden_size: int,
+                 max_attention_history: int):
         super(CachePolicyModel, self).__init__()
 
         # Embedding layers
@@ -53,7 +56,27 @@ class CachePolicyModel(nn.Module):
         self._lstm_cell = nn.LSTMCell(
             input_size=obj_id_embedder.embedding_dim + obj_size_embedder.embedding_dim,
             hidden_size=lstm_hidden_size)
+        
+        # Attention layer
+        query_dim = cache_lines_embedder.embedding_dim
+        self._history_attention = MultiQueryAttention(
+            GeneralAttention(query_dim,
+                             lstm_hidden_size))
+        
+        # Linear layer
+        # (lstm_hidden_size + cache_history_embedder.embedding_dim) -> 1
+        self._cache_line_scorer = nn.Linear(
+            in_features=lstm_hidden_size + self._cache_history_embedder.embedding_dim,
+            out_features=1)
+        # (lstm_hidden_size + cache_history_embedder.embedding_dim) -> 1
+        self._reuse_distance_estimator = nn.Linear(
+            in_features=lstm_hidden_size + self._cache_history_embedder.embedding_dim,
+            out_features=1)
+        
+        # Needs to be capped to prevent memory explosion
+        self._max_attention_history = max_attention_history
 
+        # Loss function
         self._loss_function = loss_function
 
     def forward(self, cache_states: List[CacheState]) -> torch.Tensor:
