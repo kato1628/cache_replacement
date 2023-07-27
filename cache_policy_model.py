@@ -1,9 +1,10 @@
+import collections
 import torch
 import torch.nn as nn
 import numpy as np
 from itertools import chain
 
-from typing import List
+from typing import List, Optional
 from attension import GeneralAttention, MultiQueryAttention
 from cache import CacheState
 from embed import generate_embedder
@@ -79,9 +80,32 @@ class CachePolicyModel(nn.Module):
         # Loss function
         self._loss_function = loss_function
 
-    def forward(self, cache_states: List[CacheState]) -> torch.Tensor:
+    def forward(self, cache_states: List[CacheState],
+                prev_hidden_state: Optional[object] = None) -> torch.Tensor:
+        """Computes cache line to evict
+        
+            Each cache line in the cache state is scored by the model.
+            Higher scores indicate that the cache line should be evicted.
+            
+        Args:
+            cache_states (List[CacheState]): batch of cache states to process
+                and whose cache lines to choose from.
+            prev_hidden_state (Optional[object]): the result from the previous
+                call to this function on the previous cache states. Use None
+                only for the first call.
+            inference (bool): set to be True at inference time, when the outputs
+                are not used for training. If True, the hidden state will not be
+                updated, be detached from the computation graph to prevent
+                memory explosion."""
         batch_size = len(cache_states)
 
+        if prev_hidden_state is None:
+            hidden_state, hidden_state_history, cache_states_history \
+                = (self._initial_hidden_state(batch_size))
+        else:
+            hidden_state, hidden_state_history, cache_states_history \
+                = prev_hidden_state
+        
         # Extract the cache access, cache lines, and cache history from the cache states
         cache_access, cache_lines, cache_history = zip(*cache_states)
 
@@ -108,3 +132,30 @@ class CachePolicyModel(nn.Module):
         cache_history_embedding = self._cache_history_embedder(cache_history)
 
         return
+
+    def _initial_hidden_state(self, batch_size: int) -> tuple[tuple[torch.FloatTensor,torch.FloatTensor],
+                                                              collections.deque[torch.FloatTensor],
+                                                              collections.deque[List[CacheState]]]:
+        """Returns the initial hidden state, used when no hidden state is provided.
+        
+        Args:
+            batch_size (int): the batch size of the hidden state to return.
+            
+        Returns:
+            initial_hidden_state (tuple[torch.FloatTensor, torch.FloatTensor]) tuple of initial
+                cell state and initial LSTM hidden state.
+            hidden_state_history (collections.deque[torch.FloatTensor]): the list of past hidden
+                states.
+            cache_states_history (collections.deque[List[CacheState]]): the list of past cache
+                states.
+        """
+        initial_cell_state = torch.zeros(batch_size, self._lstm_cell.hidden_size)
+        initial_hidden_state = torch.zeros(batch_size, self._lstm_cell.hidden_size)
+        initial_hidden_state_history = collections.deque([],
+                                                         maxlen=self._max_attention_history)
+        initial_cache_states_history = collections.deque([],
+                                                        maxlen=self._max_attention_history)
+        
+        return ((initial_cell_state, initial_hidden_state),
+                initial_hidden_state_history,
+                initial_cache_states_history)
