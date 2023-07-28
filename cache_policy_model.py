@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from itertools import chain
-from cache import CacheState
+from cache import CacheState, EvictionEntry
 from torch.nn import functional as F
 from typing import List, Optional
 from attension import GeneralAttention, MultiQueryAttention
@@ -80,7 +80,7 @@ class CachePolicyModel(nn.Module):
         # Loss function
         self._loss_function = loss_function
 
-    def forward(self, cache_states: List[CacheState],
+    def forward(self, eviction_entries: List[EvictionEntry],
                 prev_hidden_state: Optional[object] = None,
                 inference=False) -> torch.Tensor:
         """Computes cache line to evict
@@ -89,8 +89,7 @@ class CachePolicyModel(nn.Module):
             Higher scores indicate that the cache line should be evicted.
             
         Args:
-            cache_states (List[CacheState]): batch of cache states to process
-                and whose cache lines to choose from.
+            eviction_entries (List[EvictionEntry]): the list of eviction entries
             prev_hidden_state (Optional[object]): the result from the previous
                 call to this function on the previous cache states. Use None
                 only for the first call.
@@ -98,7 +97,7 @@ class CachePolicyModel(nn.Module):
                 are not used for training. If True, the hidden state will not be
                 updated, be detached from the computation graph to prevent
                 memory explosion."""
-        batch_size = len(cache_states)
+        batch_size = len(eviction_entries)
 
         if prev_hidden_state is None:
             hidden_state, hidden_state_history, cache_states_history \
@@ -108,7 +107,8 @@ class CachePolicyModel(nn.Module):
                 = prev_hidden_state
         
         # Extract the cache access, cache lines, and cache history from the cache states
-        cache_access, cache_lines, cache_history = zip(*cache_states)
+        cache_states = [entry.cache_state for entry in eviction_entries]
+        cache_access, cache_lines, _ = zip(*cache_states)
 
         # Embed the obj_id and obj_size
         # (batch_size, embedding_dim)

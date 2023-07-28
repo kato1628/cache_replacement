@@ -3,7 +3,7 @@ config = {
         "filepath": "./dataset/wiki2018_dev.tr",
         "window_size": 100000,
         "capacity": 1000000000,
-        "access_history_len": 10000,
+        "access_history_len": 30,
         "max_examples": 500
     },
     "model": {
