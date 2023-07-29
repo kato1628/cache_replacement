@@ -24,8 +24,9 @@ for dataset in training_datasets:
     for batch in batches:
         print("Training...")
         optimizer.zero_grad()
-        cache_states, cache_decisions = zip(*batch)
-        # output = model(cache_states)
+        scores, prev_reuse_distances, hidden_state = model(batch)
+        print(scores)
+        
 
         # loss = model.loss(output, cache_decision)
         # loss.backward()

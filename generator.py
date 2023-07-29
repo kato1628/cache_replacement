@@ -1,7 +1,8 @@
 import tqdm
-from cache import Cache, CacheAccess
-from eviction_policy import BeladyScorer, GreedyEvictionPolicy
+from typing import List
 from wiki_trace import WikiTrace
+from cache import Cache, CacheAccess, EvictionEntry
+from eviction_policy import BeladyScorer, GreedyEvictionPolicy
 
 
 def train_data_generator(config):
@@ -22,8 +23,8 @@ def train_data_generator(config):
                 while len(train_data) <= config["max_examples"] and not trace.done():
                     time, obj_id, obj_size, obj_type = trace.next()
                     access = CacheAccess(time, obj_id, obj_size, obj_type)
-                    cache_state, cache_decision = cache.read(access)
-                    train_data.append((cache_state, cache_decision))
+                    eviction_entry = cache.read(access)
+                    train_data.append(eviction_entry)
                     pbar.update(1)
 
                 print("Cache hit rate:", cache.hit_rate_statistic.success_rate())

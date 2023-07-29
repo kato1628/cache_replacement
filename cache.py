@@ -1,3 +1,4 @@
+from typing import List
 from collections import namedtuple, deque
 from eviction_policy import EvictionPolicy
 
@@ -36,11 +37,46 @@ class CacheDecision(namedtuple(
       - cache_line_scores (Dict): maps a cache line (int) to its score (int) as
       determined by an EvictionPolicy. Lower score indicates more evictable.
     """
+    def rank_cache_lines(self, cache_lines: List[int]) -> List[int]:
+        """ Rank cache lines by their scores
+
+        Args:
+          - cache_lines (List[int]): maps a cache line (int) to its score (int)
+
+        Returns:
+          - ranked_cache_lines (List[int]): a list of cache line ids
+        """
+        return sorted(cache_lines,
+                      key=lambda line: self.cache_line_scores[line])
+
+class EvictionEntry(namedtuple(
+    "EvictionEntry",
+    ("cache_state", "cache_decision"))):
+    """ Information about cache state and corresponding cache decision.
+    
+    Consists of:
+      - cache_state (CacheState): a cache state. The cache lines (cache_state.cache_lines)
+        are guaranteed to be ordered from most evictable to least evictable according to
+        eviction_decision.cache_line_scores.
+      - cache_decision (CacheDecision): a cache decision for the cache state, including
+        whether a cache line was evicted and the scores for each cache line.
+    """
+    __slots__ = ()
+
+    def __new__(self, cache_state: CacheState, cache_decision: CacheDecision):
+        # Sort the cache lines in cache_state by their scores
+        cache_state = cache_state._replace(
+            cache_lines=cache_decision.rank_cache_lines(cache_state.cache_lines))
+        
+        return super(EvictionEntry, self).__new__(self,
+                                                  cache_state,
+                                                  cache_decision)
 
 class Cache(object):
     """ A cache object """
-    def __init__(self, capacity: int, eviction_policy: EvictionPolicy,
-                access_history_len=10000):
+    def __init__(self, capacity: int,
+                 eviction_policy: EvictionPolicy,
+                 access_history_len=30):
         """Constructs.
 
         Args:
@@ -57,7 +93,7 @@ class Cache(object):
         self._cache_history = deque(maxlen=access_history_len)
         self._hit_rate_statistic = BernoulliProcessStatistic()
 
-    def read(self, access: CacheAccess) -> tuple[CacheState, CacheDecision]:
+    def read(self, access: CacheAccess) -> EvictionEntry:
         """Constructs.
 
         Args:
@@ -65,8 +101,7 @@ class Cache(object):
           obj_size: Requested Object size
 
         Reterns:
-          cache_state (CacheState)
-          cache_decision (CacheDecision)
+          - eviction_entry (EvictionEntry): a cache state and corresponding cache decision
         """
 
         # store the access to cache history
@@ -83,7 +118,8 @@ class Cache(object):
         # Record cache hit/miss
         self._hit_rate_statistic.trial(hit)
         if hit:
-            return cache_state, CacheDecision(False, scores)
+            return EvictionEntry(cache_state,
+                                 CacheDecision(False, scores))
 
         # The case of cache miss
         next_cache_size = self._current_cache_used() + access.obj_size
@@ -93,6 +129,7 @@ class Cache(object):
         
         # Evict cache lines until the current cache size is less than capacity
         while next_cache_size > self._capacity:
+            # Evict the line with the lowest score (the longest reuse distance)
             line_to_evict = lines_to_evict.pop(0)
             next_cache_size -= self._cache_lines[line_to_evict]
             del self._cache_lines[line_to_evict]
@@ -100,7 +137,9 @@ class Cache(object):
         # store the object to cache line
         self._cache_lines[access.obj_id] = access.obj_size
 
-        return cache_state, CacheDecision(evict, scores)
+        return EvictionEntry(
+                  cache_state,
+                  CacheDecision(evict, scores))
 
     def _current_cache_used(self) -> int:
         """ Calculate the current used size
