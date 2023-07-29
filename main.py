@@ -1,4 +1,5 @@
 import torch.optim as optim
+from utils import as_batches
 from cache_policy_model import CachePolicyModel
 from configuration import config
 from generator import train_data_generator
@@ -12,22 +13,18 @@ optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"
 
 # Train the model
 for dataset in training_datasets:
+
+    print("Training...")
     batch_size = config["training"]["batch_size"]
-    
-    # Chop up the dataset into batches
-    subseq_length = len(dataset) // batch_size
-    # (batch_size, subseq_length)
-    batches = [
-      dataset[i * subseq_length: (i+1) * subseq_length] for i in range(batch_size)
-    ]
+    sequence_length = config["training"]["sequence_length"]
+    warmup_period = sequence_length // 2
 
-    for batch in batches:
-        print("Training...")
+    # Generate batches from dataset
+    for batch_num, batch in enumerate(as_batches([dataset], batch_size, sequence_length)):
         optimizer.zero_grad()
-        scores, prev_reuse_distances, hidden_state = model(batch)
-        print(scores)
+        loss = model.loss(batch, warmup_period)
+        print(loss)
         
-
         # loss = model.loss(output, cache_decision)
         # loss.backward()
         # optimizer.step()

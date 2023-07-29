@@ -4,7 +4,7 @@ config = {
         "window_size": 100000,
         "capacity": 1000000000,
         "access_history_len": 30,
-        "max_examples": 500
+        "max_examples": 5000
     },
     "model": {
         "obj_id_embedder": {
@@ -28,5 +28,6 @@ config = {
     "training": {
         "learning_rate": 0.001,
         "batch_size": 32,
+        "sequence_length": 80,
     }
 }
