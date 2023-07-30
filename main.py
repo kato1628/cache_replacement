@@ -23,11 +23,9 @@ for dataset in training_datasets:
     for batch_num, batch in enumerate(as_batches([dataset], batch_size, sequence_length)):
         optimizer.zero_grad()
         loss = model.loss(batch, warmup_period)
+        loss.backward()
+        optimizer.step()
         print(loss)
-        
-        # loss = model.loss(output, cache_decision)
-        # loss.backward()
-        # optimizer.step()
 
     # print("Generating training data...")
     # for cache_state, cache_decision in dataset:

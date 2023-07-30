@@ -3,7 +3,7 @@ config = {
         "filepath": "./dataset/wiki2018_dev.tr",
         "window_size": 100000,
         "capacity": 1000000000,
-        "access_history_len": 30,
+        "access_history_len": 20,
         "max_examples": 5000
     },
     "model": {
@@ -27,7 +27,9 @@ config = {
     },
     "training": {
         "learning_rate": 0.001,
-        "batch_size": 32,
-        "sequence_length": 80,
+        # "batch_size": 32,
+        "batch_size": 16,
+        # "sequence_length": 80,
+        "sequence_length": 20,
     }
 }

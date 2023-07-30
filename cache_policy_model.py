@@ -169,10 +169,14 @@ class CachePolicyModel(nn.Module):
         # (batch_size, num_cache_lines, value_dim) -> (batch_size, num_cache_lines)
         pred_reuse_distances = self._reuse_distance_estimator(contexts).squeeze(-1)
 
+        # Return reuse distances as scores if probs aren't being trained
+        probs = torch.max(pred_reuse_distances,
+                          torch.ones_like(pred_reuse_distances) * 1e-5) * mask.float()
+
         next_hidden_state = ((next_context, next_hidden_state),
                              hidden_state_history,
                              cache_states_history)
-        
+
         return probs, pred_reuse_distances, next_hidden_state
 
     def loss(self, eviction_entries: List[List[EvictionEntry]],
@@ -204,6 +208,28 @@ class CachePolicyModel(nn.Module):
             # training the model
             _, _, hidden_state = self(cache_states, hidden_state)
 
+        # Generate predictions
+        losses = []
+        for i in range(warmup_period, len(eviction_entries[0])):
+            cache_states = [entry[i].cache_state for entry in eviction_entries]
+
+            # predict the next action and reuse distance for each entry
+            _, pred_reuse_distances, hidden_state = self(cache_states, hidden_state)
+
+            # Compute the true reuse distances
+            log_reuse_distances = []
+            for entry in eviction_entries:
+                log_reuse_distances.append(
+                    [self._log(entry[i].cache_decision.cache_line_scores[line])
+                       for line in entry[i].cache_state.cache_lines])
+            log_reuse_distances, mask = pad(log_reuse_distances)
+            log_reuse_distances = torch.tensor(log_reuse_distances).float()
+
+            # Compute the loss
+            losses.append(self._loss_function(pred_reuse_distances,
+                                              log_reuse_distances, mask))
+        
+        return torch.cat(losses, -1).mean()
 
     def _initial_hidden_state(self, batch_size: int) -> tuple[tuple[torch.FloatTensor,torch.FloatTensor],
                                                               collections.deque[torch.FloatTensor],
@@ -229,3 +255,17 @@ class CachePolicyModel(nn.Module):
         return ((initial_cell_state, initial_hidden_state),
                 initial_hidden_state_history,
                 initial_cache_states_history)
+    
+    def _log(self, score: torch.FloatTensor):
+        """Takes log10(-score), handling -infs.
+        
+        Args:
+            score (torch.FloatTensor): the score to take the log of.
+
+        Returns:
+            log_score: the log of the score.
+        """
+        upper_bound = 5.
+        if score == -np.inf:
+            return upper_bound
+        return min(upper_bound, np.log10(-score))
