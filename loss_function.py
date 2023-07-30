@@ -33,4 +33,4 @@ class ReuseDistanceLoss(LossFunction):
         """Computes the MSE between the predicted and true log reuse distances."""
         return F.mse_loss(predicted_log_reuse_distances * mask.float(),
                           true_log_reuse_distances * mask.float(),
-                          reduce=False).mean(dim=-1)
+                          reduction='none').mean(dim=-1)
