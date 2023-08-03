@@ -76,7 +76,7 @@ class GeneralAttention(Attention):
 
     def __init__(self, query_dim: int,
                  memory_key_dim: int,
-                 weight_initializer: callable = nn.init.xavier_uniform):
+                 weight_initializer: callable = nn.init.xavier_uniform_):
         """Constructs.
         
         Args:

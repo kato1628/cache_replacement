@@ -1,7 +1,8 @@
+import math
+import torch
+import numpy as np
 from typing import List, Optional
 from torch import ByteTensor
-import torch
-
 
 def pad(seq_batch: List[List[object]],
         pad_token=0,
@@ -52,3 +53,38 @@ def mask_renormalize(probs : torch.FloatTensor, mask: torch.ByteTensor) -> torch
     # Renormalize the unmasked entries
     renormalized_probs = masked_probs / (masked_probs.sum(dim=-1, keepdim=True) + 1e-8)
     return renormalized_probs
+
+def as_batches(parallel_data: List[List[object]],
+               batch_size: int, sequence_length: int) -> List[List[List[object]]]:
+    """Iterable of batches of sequences of consecutive data of sequence_length.
+
+    A single pass through this iterable will include all starting positions in
+    each of the parallel sequences in data exactly once.
+    
+    Args:
+        paralell_data (List[List[object]]): parallel sequences of consecutive
+            timesteps of data. Resulting batches will only include consecutive 
+            subsequences within a single parallel sequence of data.
+        batch_size (int): size of the batches. Last batch may contain fewer than
+            batch_size sequences.
+        sequence_length (int): length of the sequences in each batch.
+
+    Yields:
+        List[List[object]]: the outer list is length of batch_size, the inner list
+        are all length sequence_length. Inner lists are all consecutive subsequences.
+    """
+    positions = []
+    for i, seq in enumerate(parallel_data):
+        positions.extend([(i, start_pos) for start_pos in range(len(seq) - sequence_length)])
+
+    # Shuffle the positions
+    np.random.shuffle(positions)
+
+    # Yield batches of positions of size batch_size * sequence_length
+    for i in range(math.ceil(len(positions) / batch_size)):
+        batch = [
+            parallel_data[index][start:start+sequence_length]
+                for index, start in positions[i*batch_size:(i+1)*batch_size]
+        ]
+        # (batch_size, sequence_length)
+        yield batch

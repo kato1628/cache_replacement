@@ -80,7 +80,7 @@ class CachePolicyModel(nn.Module):
         # Loss function
         self._loss_function = loss_function
 
-    def forward(self, eviction_entries: List[EvictionEntry],
+    def forward(self, cache_states: List[CacheState],
                 prev_hidden_state: Optional[object] = None,
                 inference=False) -> torch.Tensor:
         """Computes cache line to evict
@@ -89,7 +89,8 @@ class CachePolicyModel(nn.Module):
             Higher scores indicate that the cache line should be evicted.
             
         Args:
-            eviction_entries (List[EvictionEntry]): the list of eviction entries
+            cache_states (List[CacheState]): the cache states to compute the
+                eviction scores for.
             prev_hidden_state (Optional[object]): the result from the previous
                 call to this function on the previous cache states. Use None
                 only for the first call.
@@ -97,7 +98,7 @@ class CachePolicyModel(nn.Module):
                 are not used for training. If True, the hidden state will not be
                 updated, be detached from the computation graph to prevent
                 memory explosion."""
-        batch_size = len(eviction_entries)
+        batch_size = len(cache_states)
 
         if prev_hidden_state is None:
             hidden_state, hidden_state_history, cache_states_history \
@@ -106,8 +107,7 @@ class CachePolicyModel(nn.Module):
             hidden_state, hidden_state_history, cache_states_history \
                 = prev_hidden_state
         
-        # Extract the cache access, cache lines, and cache history from the cache states
-        cache_states = [entry.cache_state for entry in eviction_entries]
+        # Extract the cache access and cache lines from the cache states
         cache_access, cache_lines, _ = zip(*cache_states)
 
         # Embed the obj_id and obj_size
@@ -169,11 +169,67 @@ class CachePolicyModel(nn.Module):
         # (batch_size, num_cache_lines, value_dim) -> (batch_size, num_cache_lines)
         pred_reuse_distances = self._reuse_distance_estimator(contexts).squeeze(-1)
 
+        # Return reuse distances as scores if probs aren't being trained
+        probs = torch.max(pred_reuse_distances,
+                          torch.ones_like(pred_reuse_distances) * 1e-5) * mask.float()
+
         next_hidden_state = ((next_context, next_hidden_state),
                              hidden_state_history,
                              cache_states_history)
-        
+
         return probs, pred_reuse_distances, next_hidden_state
+
+    def loss(self, eviction_entries: List[List[EvictionEntry]],
+             warmup_period: int = 0) -> torch.Tensor:
+        """Computes the losses on a sequence of consecutive eviction entries.
+        
+        The model warms up its hidden state for `warmup` steps before
+        computing the loss. Then the loss is computed on the remaining
+        entries, and returns a loss over the predicted reuse distances.
+        
+        Args:
+            eviction_entries (List[List[EvictionEntry]]): batch of sequences of eviction
+              entries. (batch_size, sequence_length)
+            warmup_period (int): the number of steps to warm up the hidden state.
+        
+        Returns:
+            loss (torch.Tensor): the loss (scalar) on the predicted reuse distances.
+        """
+        if warmup_period >= len(eviction_entries[0]):
+            raise ValueError(f"warmup_period ({warmup_period}) must be less than"
+                             f"the length of eviction_entries ({len(eviction_entries[0])})")
+        
+        # Warm up the hidden state
+        batch_size = len(eviction_entries)
+        hidden_state = self._initial_hidden_state(batch_size)
+
+        for i in range(warmup_period):
+            cache_states = [entry[i].cache_state for entry in eviction_entries]
+            # training the model
+            _, _, hidden_state = self(cache_states, hidden_state)
+
+        # Generate predictions
+        losses = []
+        for i in range(warmup_period, len(eviction_entries[0])):
+            cache_states = [entry[i].cache_state for entry in eviction_entries]
+
+            # predict the next action and reuse distance for each entry
+            _, pred_reuse_distances, hidden_state = self(cache_states, hidden_state)
+
+            # Compute the true reuse distances
+            log_reuse_distances = []
+            for entry in eviction_entries:
+                log_reuse_distances.append(
+                    [self._log(entry[i].cache_decision.cache_line_scores[line])
+                       for line in entry[i].cache_state.cache_lines])
+            log_reuse_distances, mask = pad(log_reuse_distances)
+            log_reuse_distances = torch.tensor(log_reuse_distances).float()
+
+            # Compute the loss
+            losses.append(self._loss_function(pred_reuse_distances,
+                                              log_reuse_distances, mask))
+        
+        return torch.cat(losses, -1).mean()
 
     def _initial_hidden_state(self, batch_size: int) -> tuple[tuple[torch.FloatTensor,torch.FloatTensor],
                                                               collections.deque[torch.FloatTensor],
@@ -193,11 +249,23 @@ class CachePolicyModel(nn.Module):
         """
         initial_cell_state = torch.zeros(batch_size, self._lstm_cell.hidden_size)
         initial_hidden_state = torch.zeros(batch_size, self._lstm_cell.hidden_size)
-        initial_hidden_state_history = collections.deque([],
-                                                         maxlen=self._max_attention_history)
-        initial_cache_states_history = collections.deque([],
-                                                        maxlen=self._max_attention_history)
+        initial_hidden_state_history = collections.deque([], maxlen=self._max_attention_history)
+        initial_cache_states_history = collections.deque([], maxlen=self._max_attention_history)
         
         return ((initial_cell_state, initial_hidden_state),
                 initial_hidden_state_history,
                 initial_cache_states_history)
+    
+    def _log(self, score: torch.FloatTensor):
+        """Takes log10(-score), handling -infs.
+        
+        Args:
+            score (torch.FloatTensor): the score to take the log of.
+
+        Returns:
+            log_score: the log of the score.
+        """
+        upper_bound = 5.
+        if score == -np.inf:
+            return upper_bound
+        return min(upper_bound, np.log10(-score))
