@@ -4,36 +4,40 @@ from cache_policy_model import CachePolicyModel
 from configuration import config
 from generator import train_data_generator
 
-# Create training datasets generator
-training_datasets = train_data_generator(config["dataset"])
+def main():
+    # Create experiment directory
+    # experiment_dir = os.path.join(config["experiment"]["base_dir"],
+    #                               config["experiment"]["name"])
+    # create_experiment_directory(experiment_dir, overwrite=True)
 
-# Initialize the model and optimizer
-model = CachePolicyModel.from_config(config["model"])
-optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
+    # Create tensorboard writer
+    # tb_writer = create_tb_writer(experiment_dir)
 
-# Train the model
-for dataset in training_datasets:
+    # Create training datasets generator
+    training_datasets = train_data_generator(config["dataset"])
 
-    print("Training...")
-    batch_size = config["training"]["batch_size"]
-    sequence_length = config["training"]["sequence_length"]
-    warmup_period = sequence_length // 2
+    # Initialize the model and optimizer
+    model = CachePolicyModel.from_config(config["model"])
+    optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
 
-    # Generate batches from dataset
-    for batch_num, batch in enumerate(as_batches([dataset], batch_size, sequence_length)):
-        optimizer.zero_grad()
-        loss = model.loss(batch, warmup_period)
-        loss.backward()
-        optimizer.step()
-        print(loss)
 
-    # print("Generating training data...")
-    # for cache_state, cache_decision in dataset:
-    #     print("Training...")
-    #     optimizer.zero_grad()
-        # output = model(cache_state.cache_access,
-        #                cache_state.cache_lines,
-        #                cache_state.cache_history)
-        # loss = model.loss(output, cache_decision)
-        # loss.backward()
-        # optimizer.step()
+    # Train the model
+    for dataset, cache_hit_rates in training_datasets:
+
+
+        print("Training...")
+        batch_size = config["training"]["batch_size"]
+        sequence_length = config["training"]["sequence_length"]
+        warmup_period = sequence_length // 2
+
+        # Generate batches from dataset
+        for batch_num, batch in enumerate(as_batches([dataset], batch_size, sequence_length)):
+            optimizer.zero_grad()
+            loss = model.loss(batch, warmup_period)
+            loss.backward()
+            optimizer.step()
+            print(loss)
+
+            
+if __name__ == "__main__":
+    main()
