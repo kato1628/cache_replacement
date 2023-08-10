@@ -4,7 +4,8 @@ config = {
         "window_size": 100000,
         "capacity": 1000000000,
         "access_history_len": 20,
-        "max_examples": 5000
+        "max_examples": 2500,
+        "scorer_type": "belady"
     },
     "model": {
         "obj_id_embedder": {
