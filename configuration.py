@@ -1,6 +1,10 @@
 config = {
+    "experiment": {
+        "base_dir": "./experiments",
+        "name": "test",
+    },
     "dataset": {
-        "filepath": "./dataset/wiki2018_dev.tr",
+        "filepath": "./dataset/wiki2018_test.tr",
         "window_size": 100000,
         "capacity": 1000000000,
         "access_history_len": 20,
@@ -32,5 +36,8 @@ config = {
         "batch_size": 16,
         # "sequence_length": 80,
         "sequence_length": 20,
+        "update_frequency": 15,
+        "collection_multiplier": 5,
+        "total_steps": 10000,
     }
 }

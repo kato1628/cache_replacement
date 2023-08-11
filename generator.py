@@ -1,8 +1,8 @@
 import tqdm
-from typing import List
+from typing import Dict, List
 from wiki_trace import WikiTrace
 from cache import Cache, CacheAccess, EvictionEntry
-from eviction_policy import BeladyScorer, GreedyEvictionPolicy
+from eviction_policy import generate_eviction_policy
 
 
 def train_data_generator(config: Dict) -> tuple[List[EvictionEntry], List[float]]:
@@ -23,8 +23,7 @@ def train_data_generator(config: Dict) -> tuple[List[EvictionEntry], List[float]
         for each example.
     """
     with WikiTrace(config["filepath"], max_look_ahead=config["window_size"]) as trace:
-        scorer = BeladyScorer(trace)
-        eviction_policy = GreedyEvictionPolicy(scorer)
+        eviction_policy = generate_eviction_policy(trace, config["scorer_type"])
         cache = Cache(config["capacity"], eviction_policy, config["access_history_len"])
 
         desc = "Generating training data..."
