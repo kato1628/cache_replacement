@@ -5,7 +5,7 @@ from cache import Cache, CacheAccess, EvictionEntry
 from eviction_policy import generate_eviction_policy
 
 
-def train_data_generator(config: Dict) -> tuple[List[EvictionEntry], List[float]]:
+def train_data_generator(config: Dict, max_examples: int) -> tuple[List[EvictionEntry], List[float]]:
     """
     Generates training data from the trace file.
 
@@ -35,7 +35,7 @@ def train_data_generator(config: Dict) -> tuple[List[EvictionEntry], List[float]
                 # Reset the cache hit rate statistic
                 cache.hit_rate_statistic.reset()
 
-                while len(train_data) <= config["max_examples"] and not trace.done():
+                while len(train_data) <= max_examples and not trace.done():
                     time, obj_id, obj_size, obj_type = trace.next()
                     access = CacheAccess(time, obj_id, obj_size, obj_type)
                     eviction_entry = cache.read(access)

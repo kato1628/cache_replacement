@@ -1,3 +1,6 @@
+import io
+import os
+import torch
 import torch.optim as optim
 import tqdm
 from common.utils import create_experiment_directory
@@ -16,8 +19,13 @@ def main():
     # Create tensorboard writer
     # tb_writer = create_tb_writer(experiment_dir)
 
+    update_frequency = config["training"]["update_frequency"]
+    batch_size = config["training"]["batch_size"]
+    sequence_length = config["training"]["sequence_length"]
+    max_examples = (update_frequency * batch_size * sequence_length)
+
     # Create training datasets generator
-    training_datasets = train_data_generator(config["dataset"])
+    training_datasets = train_data_generator(config["dataset"], max_examples)
 
     # Initialize the model and optimizer
     model = CachePolicyModel.from_config(config["model"])
@@ -36,8 +44,6 @@ def main():
             # log_hit_rates("cache_hit_rates/train_belady_policy", cache_hit_rates, get_step())
 
             print("Training...")
-            batch_size = config["training"]["batch_size"]
-            sequence_length = config["training"]["sequence_length"]
             warmup_period = sequence_length // 2
 
             # Generate batches from dataset
@@ -49,6 +55,15 @@ def main():
                 pbar.update(1)
                 step += 1
                 print(loss)
+
+                # save model
+                if step % config["training"]["save_frequency"] == 0 and step != 0:
+                    save_path = os.path.join(config["training"]["checkpoint_dir"], f"model_{step}.ckpt")
+                    with open(save_path, "wb") as save_file:
+                        checkpoint_buffer = io.BytesIO()
+                        torch.save(model.state_dict(), checkpoint_buffer)
+                        print(f"Saving model at step {step}")
+                        save_file.write(checkpoint_buffer.getvalue())
 
                 # Break if the step counter exceeds the total number of steps
                 if step >= total_steps:
