@@ -23,7 +23,10 @@ def train_data_generator(config: Dict, max_examples: int) -> tuple[List[Eviction
         for each example.
     """
     with WikiTrace(config["filepath"], max_look_ahead=config["window_size"]) as trace:
-        eviction_policy = generate_eviction_policy(trace, config["scorer_type"])
+        eviction_policy = generate_eviction_policy(
+                            config["scorer_type"],
+                            trace,
+                            None)
         cache = Cache(config["capacity"], eviction_policy, config["access_history_len"])
 
         desc = "Generating training data..."

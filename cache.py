@@ -118,7 +118,7 @@ class Cache(object):
         cache_state = self._get_cache_state(access)
 
         # compute scores and identify the line to evict by policy
-        lines_to_evict, scores = self._eviction_policy(self._cache_lines, self._access_times)
+        lines_to_evict, scores = self._eviction_policy(cache_state, self._access_times)
 
         # The case of cache hit
         hit = access.obj_id in self._cache_lines
@@ -167,7 +167,7 @@ class Cache(object):
         """
         return CacheState(
             access,
-            list(self._cache_lines.keys()),
+            list(self._cache_lines.keys()), # avoid mutating the cache lines after eviction
             self._cache_history
         )
 

@@ -1,10 +1,11 @@
 import io
 import os
+import numpy as np
 import torch
 import torch.optim as optim
 import tqdm
-from common.utils import create_experiment_directory
 from cache_tensorboard import log_hit_rates
+from evaluator import measure_cache_hit_rate
 from utils import as_batches
 from cache_policy_model import CachePolicyModel
 from configuration import config
@@ -21,8 +22,8 @@ def main():
 
     update_frequency = config["training"]["update_frequency"]
     batch_size = config["training"]["batch_size"]
-    sequence_length = config["training"]["sequence_length"]
-    max_examples = (update_frequency * batch_size * sequence_length)
+    collection_multiplier = config["training"]["collection_multiplier"]
+    max_examples = (update_frequency * batch_size * collection_multiplier)
 
     # Create training datasets generator
     training_datasets = train_data_generator(config["dataset"], max_examples)
@@ -44,6 +45,7 @@ def main():
             # log_hit_rates("cache_hit_rates/train_belady_policy", cache_hit_rates, get_step())
 
             print("Training...")
+            sequence_length = config["training"]["sequence_length"]
             warmup_period = sequence_length // 2
 
             # Generate batches from dataset
@@ -54,9 +56,8 @@ def main():
                 optimizer.step()
                 pbar.update(1)
                 step += 1
-                print(loss)
 
-                # save model
+                # Save model
                 if step % config["training"]["save_frequency"] == 0 and step != 0:
                     save_path = os.path.join(config["training"]["checkpoint_dir"], f"model_{step}.ckpt")
                     with open(save_path, "wb") as save_file:
@@ -64,6 +65,14 @@ def main():
                         torch.save(model.state_dict(), checkpoint_buffer)
                         print(f"Saving model at step {step}")
                         save_file.write(checkpoint_buffer.getvalue())
+
+                # Evaluate model
+                if step % config["training"]["evaluation_frequency"] == 0 and step != 0:
+                    hit_rates = next(measure_cache_hit_rate(model,
+                                                            config["dataset"],
+                                                            config["training"]["evaluation_size"]))
+                    print(f"Hit rates: {np.mean(hit_rates)}, step: {step}")
+                    log_hit_rates("cache_hit_rates/train", hit_rates, get_step())
 
                 # Break if the step counter exceeds the total number of steps
                 if step >= total_steps:
