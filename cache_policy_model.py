@@ -116,19 +116,20 @@ class CachePolicyModel(nn.Module):
         obj_size_embedding = self._obj_size_embedder([access.obj_size for access in cache_access])
 
         # Concatenate the obj_id and obj_size embeddings
+        # and conpute the nect cell and hidden state
         # (batch_size, hidden_size)
-        next_context, next_hidden_state = self._lstm_cell(
+        next_c, next_h = self._lstm_cell(
             torch.cat([obj_id_embedding, obj_size_embedding], dim=-1),
             hidden_state)
 
         if inference:
-            next_context = next_context.detach()
-            next_hidden_state = next_hidden_state.detach()
+            next_c = next_c.detach()
+            next_h = next_h.detach()
         
         # Store the hidden state and cache state to history
         # Do not modify history in place
         hidden_state_history = hidden_state_history.copy()
-        hidden_state_history.append(next_hidden_state)
+        hidden_state_history.append(next_h)
         cache_states_history = cache_states_history.copy()
         cache_states_history.append(cache_states)
         
@@ -173,7 +174,7 @@ class CachePolicyModel(nn.Module):
         probs = torch.max(pred_reuse_distances,
                           torch.ones_like(pred_reuse_distances) * 1e-5) * mask.float()
 
-        next_hidden_state = ((next_context, next_hidden_state),
+        next_hidden_state = ((next_c, next_h),
                              hidden_state_history,
                              cache_states_history)
 

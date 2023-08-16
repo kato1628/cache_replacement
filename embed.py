@@ -71,8 +71,7 @@ class DynamicVocabEmbedder(Embedder):
             torch.FloatTensor: the embeddings of the inputs.
         """
         def input_to_index(input):
-            if (input not in self._input_to_index and
-                self._vocab_size < self._max_vocab_size):
+            if (input not in self._input_to_index and self._vocab_size < self._max_vocab_size):
 
                 self._input_to_index[input] = self._vocab_size
                 self._vocab_size += 1
