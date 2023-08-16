@@ -28,8 +28,15 @@ def main():
     # Create training datasets generator
     training_datasets = train_data_generator(config["dataset"], max_examples)
 
+    # Process everything on GPU if available
+    device = torch.device("cpu")
+    if torch.cuda.is_available():
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        device = torch.device("cuda:0")
+    print("Device:", device)
+
     # Initialize the model and optimizer
-    model = CachePolicyModel.from_config(config["model"])
+    model = CachePolicyModel.from_config(config["model"]).to(device)
     optimizer = optim.Adam(model.parameters(), lr=config["training"]["learning_rate"])
 
     # Initialize the step counter
@@ -42,7 +49,7 @@ def main():
         for dataset, cache_hit_rates in training_datasets:
 
             # Log the hit rates
-            # log_hit_rates("cache_hit_rates/train_belady_policy", cache_hit_rates, get_step())
+            log_hit_rates("cache_hit_rates/train_belady_policy", cache_hit_rates, get_step())
 
             print("Training...")
             sequence_length = config["training"]["sequence_length"]
