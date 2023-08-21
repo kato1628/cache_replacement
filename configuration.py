@@ -20,10 +20,11 @@ config = {
             "embedding_dim": 32,
         },
         "obj_size_embedder": {
-            "type": "dynamic_vocab",
-            "max_vocab_size": 5000,
+            "type": "logarithmic",
             # "embedding_dim": 64,
             "embedding_dim": 32,
+            "max_size": 1000000000,
+            "max_vocab_size": 100,
         },
         "cache_lines_embedder": "obj_id_embedder",
         "positional_embedder": {
