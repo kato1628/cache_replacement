@@ -1,6 +1,9 @@
-from typing import List
+from __future__ import annotations # to avoid circular import
+from typing import TYPE_CHECKING, List
 from collections import namedtuple, deque
-from eviction_policy import EvictionPolicy
+# to avoid circular import
+if TYPE_CHECKING:
+    from eviction_policy import EvictionPolicy
 
 class CacheAccess(namedtuple(
     "CacheAccess",
