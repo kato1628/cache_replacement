@@ -2,7 +2,11 @@ from __future__ import annotations # to avoid circular import
 import six
 import abc
 from typing import TYPE_CHECKING, Dict, List, Optional, TypedDict
+
+import torch
+from cache_policy_model import CachePolicyModel
 from wiki_trace import WikiTrace
+from configuration import config
 
 # to avoid circular import
 if TYPE_CHECKING:
@@ -88,6 +92,32 @@ class LearnedScorer(CacheLineScorer):
                                     inference=True)
       return {line: -scores[0, i].item() for i, line in enumerate(cache_state.cache_lines)}      
 
+    @classmethod
+    def from_model_checkpoint(self, config: Dict, model_checkpoint: Optional[str] = None) -> CacheLineScorer:
+      """Creates scorer from a model loaded from the given checkpoint and config.
+      
+      Arg:
+        config: the config to use for the model.
+        model_checkpoint (str | None): path to acheckpoint for the model. Model uses default random
+          initialization if no checkpoint is provided.
+      
+      Returns:
+        scorer(CacheLineScorer) : the scorer using the given model.
+      """ 
+      device = "cpu"
+      if torch.cuda.is_available():
+        torch.set_default_tensor_type(torch.cuda.FloatTensor)
+        device = "cuda:0"
+      
+      scoring_model = CachePolicyModel.from_config(config).to(torch.device(device))
+
+      if model_checkpoint:
+         with open(model_checkpoint, "rb") as f:
+            scoring_model.load_state_dict(torch.load(f, map_location=device))
+
+      return self(scoring_model)
+        
+
 
 class EvictionPolicy(six.with_metaclass(abc.ABCMeta, object)):
   """Policy for determining what cache line to evict."""
@@ -121,12 +151,21 @@ class GreedyEvictionPolicy(EvictionPolicy):
 
         return lines_to_evict, scores
 
-def generate_eviction_policy(scorer_type: str, trace: WikiTrace, learned_policy) -> EvictionPolicy:
+def generate_eviction_policy(scorer_type: str, 
+                             trace: WikiTrace,
+                             learned_policy=None,
+                             model_checkpoint: str=None) -> EvictionPolicy:
     if scorer_type == "belady":
         return GreedyEvictionPolicy(BeladyScorer(trace))
     elif scorer_type == "lru":
         return GreedyEvictionPolicy(LRUScorer())
     elif scorer_type == "learned":
-        return GreedyEvictionPolicy(LearnedScorer(learned_policy))
+        if learned_policy is not None:
+            scorer = LearnedScorer(learned_policy)
+        elif model_checkpoint is not None:
+            scorer = LearnedScorer.from_model_checkpoint(config["model"], model_checkpoint)
+        else:
+            raise ValueError("Must provide either a learned policy or a model checkpoint")
+        return GreedyEvictionPolicy(scorer)
     else:
         raise ValueError("Unknown scorer: {}".format(scorer_type))

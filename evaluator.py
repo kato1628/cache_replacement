@@ -3,16 +3,32 @@ from cache import Cache, CacheAccess
 from eviction_policy import generate_eviction_policy
 from wiki_trace import WikiTrace
 
-def measure_cache_hit_rate(policy_model, config, max_examples):
+def cache_hit_rate_evaluator(config, policy_model, model_checkpoint, max_examples=5000):
+    """
+    Measures the cache hit rate of the given policy model.
+    Args:
+        config: A dictionary containing the following keys:
+            filepath (str): the path to the trace file.
+            window_size (int): the maximum number of accesses to look ahead.
+            capacity (int): the cache capacity (byte).
+            access_history_len (int): the length of the access history.
+        policy_model: The policy model to evaluate.
+        model_checkpoint: The path to the model checkpoint file.
+    
+    Yields:
+        A list of cache hit rates for each example.
+    """
     with WikiTrace(config["filepath"], max_look_ahead=config["window_size"]) as trace:
         eviction_policy = generate_eviction_policy(
-                            "learned",
+                            config["scorer_type"],
                             None,
-                            policy_model)
-        cache = Cache(config["capacity"], eviction_policy, config["access_history_len"])
+                            policy_model,
+                            model_checkpoint)
+        cache = Cache(config["capacity"],
+                      eviction_policy,
+                      config["access_history_len"])
 
         desc = "Evaluating the model..."
-        step = 0
         with tqdm.tqdm(desc=desc) as pbar:
             while not trace.done():
                 cache_hit_rates = []
@@ -20,12 +36,11 @@ def measure_cache_hit_rate(policy_model, config, max_examples):
                 # Reset the cache hit rate statistic
                 cache.hit_rate_statistic.reset()
 
-                while step <= max_examples and not trace.done():
+                while len(cache_hit_rates) <= max_examples and not trace.done():
                     time, obj_id, obj_size, obj_type = trace.next()
                     access = CacheAccess(time, obj_id, obj_size, obj_type)
-                    _ = cache.read(access)
+                    cache.read(access)
                     cache_hit_rates.append(cache.hit_rate_statistic.success_rate())
-                    step += 1
                     pbar.update(1)
 
                 yield cache_hit_rates
