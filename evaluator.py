@@ -14,6 +14,7 @@ def cache_hit_rate_evaluator(config, policy_model, model_checkpoint, max_example
             access_history_len (int): the length of the access history.
         policy_model: The policy model to evaluate.
         model_checkpoint: The path to the model checkpoint file.
+        max_examples: The maximum number of examples to evaluate.
     
     Yields:
         A list of cache hit rates for each example.
