@@ -1,4 +1,6 @@
 import math
+import os
+import pickle
 import torch
 import numpy as np
 from typing import List, Optional
@@ -88,3 +90,41 @@ def as_batches(parallel_data: List[List[object]],
         ]
         # (batch_size, sequence_length)
         yield batch
+
+def save_pickle(pikle_file_path, result):
+    """Saves result to pikle_file_path.
+    
+    Args:
+        pikle_file_path (str): path to save the result to.
+        result (object): object to save.
+    
+    Raises:
+        ValueError: if the file already exists.
+    
+    Returns:
+        None
+    """
+
+    if os.path.exists(pikle_file_path):
+        raise ValueError(f"File already exists: {pikle_file_path}")
+    
+    with open(pikle_file_path,"wb") as f:
+        pickle.dump(result, f)
+
+def load_pickle(pickle_file_path):
+    """Loads a pickle file.
+    
+    Args:
+        pickle_file_path (str): path to the pickle file.
+    
+    Raises:
+        ValueError: if the file does not exist.
+    
+    Returns:
+        object: the object loaded from the pickle file.
+    """
+    if not os.path.exists(pickle_file_path):
+        with open(pickle_file_path, "rb") as f:
+            return pickle.load(f)
+    else:
+        raise ValueError(f"File does not exist: {pickle_file_path}")
