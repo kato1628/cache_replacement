@@ -1,6 +1,9 @@
-from typing import List
+from __future__ import annotations # to avoid circular import
+from typing import TYPE_CHECKING, List
 from collections import namedtuple, deque
-from eviction_policy import EvictionPolicy
+# to avoid circular import
+if TYPE_CHECKING:
+    from eviction_policy import EvictionPolicy
 
 class CacheAccess(namedtuple(
     "CacheAccess",
@@ -92,6 +95,10 @@ class Cache(object):
         self._eviction_policy = eviction_policy
         self._cache_history = deque(maxlen=access_history_len)
         self._hit_rate_statistic = BernoulliProcessStatistic()
+        # maps object id to the last access time
+        self._access_times = {}
+        # Used to order access times
+        self._read_counter = 0
 
     def read(self, access: CacheAccess) -> EvictionEntry:
         """Constructs.
@@ -103,6 +110,9 @@ class Cache(object):
         Reterns:
           - eviction_entry (EvictionEntry): a cache state and corresponding cache decision
         """
+        # update access times
+        self._read_counter += 1
+        self._access_times[access.obj_id] = self._read_counter
 
         # store the access to cache history
         self._cache_history.append(access)
@@ -111,7 +121,7 @@ class Cache(object):
         cache_state = self._get_cache_state(access)
 
         # compute scores and identify the line to evict by policy
-        lines_to_evict, scores = self._eviction_policy(self._cache_lines)
+        lines_to_evict, scores = self._eviction_policy(cache_state, self._access_times)
 
         # The case of cache hit
         hit = access.obj_id in self._cache_lines
@@ -160,7 +170,7 @@ class Cache(object):
         """
         return CacheState(
             access,
-            list(self._cache_lines.keys()),
+            list(self._cache_lines.keys()), # avoid mutating the cache lines after eviction
             self._cache_history
         )
 

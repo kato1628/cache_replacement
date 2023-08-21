@@ -1,3 +1,6 @@
+import math
+from typing import List
+import numpy as np
 import torch
 from torch import nn
 from abc import ABCMeta
@@ -15,6 +18,10 @@ def generate_embedder(embedder_config: dict) -> nn.Module:
     if embedder_config["type"] == "dynamic_vocab":
         return DynamicVocabEmbedder(embedder_config["embedding_dim"],
                                     embedder_config["max_vocab_size"])
+    elif embedder_config["type"] == "logarithmic":
+        return LogarithmicEmbedder(embedder_config["embedding_dim"],
+                                   embedder_config["max_size"],
+                                   embedder_config["max_vocab_size"])
     elif embedder_config["type"] == "positional":
         return PositionalEmbedder(embedder_config["embedding_dim"])
     else:
@@ -71,8 +78,7 @@ class DynamicVocabEmbedder(Embedder):
             torch.FloatTensor: the embeddings of the inputs.
         """
         def input_to_index(input):
-            if (input not in self._input_to_index and
-                self._vocab_size < self._max_vocab_size):
+            if (input not in self._input_to_index and self._vocab_size < self._max_vocab_size):
 
                 self._input_to_index[input] = self._vocab_size
                 self._vocab_size += 1
@@ -113,3 +119,40 @@ class PositionalEmbedder(Embedder):
                                 torch.cos(embedding))
 
         return embedding
+
+class LogarithmicEmbedder(Embedder):
+    """ Embeds a batch of object sizes into a vector space using a logarithmic scale. """
+
+    def __init__(self, embedding_dim: int, max_size: int, max_vocab_size: int) -> None:
+        super().__init__(embedding_dim)
+
+        # Calculate logarithmic scale boundaries
+        log_boundaries = np.logspace(0, np.log10(max_size), num=max_vocab_size)
+
+        # Calculate embedding indices based on the logarithmic scale
+        self._log_to_index = {}
+        for i, boundary in enumerate(log_boundaries):
+            self._log_to_index[boundary] = i
+
+        # Create embedding matrix
+        self._embedding_matrix = torch.nn.Embedding(max_vocab_size, embedding_dim)
+
+    def forward(self, inputs: List[float]) -> torch.FloatTensor:
+        """Embeds a batch of inputs using the logarithmic scale.
+        
+        Args:
+            inputs (list[float]): a list of inputs to embed.
+        
+        Returns:
+            torch.FloatTensor: the embeddings of the inputs.
+        """
+        indices = []
+        for size in inputs:
+            # Find the index that satisfies the condition
+            index = next(idx for boundary, idx in self._log_to_index.items() if boundary > size)
+            
+            indices.append(index)
+        indices = torch.tensor(indices, dtype=torch.long)
+
+        embeddings = self._embedding_matrix(indices)
+        return embeddings
