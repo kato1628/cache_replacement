@@ -9,7 +9,7 @@ config = {
         # "capacity": 2000000000,
         "capacity": 500000000,
         "access_history_len": 20,
-        "scorer_type": "belady"
+        "scorer_type": "mixture"
     },
     "model": {
         "obj_id_embedder": {
@@ -36,20 +36,26 @@ config = {
         "lstm_hidden_size": 32,
         "max_attention_history": 50,
     },
+    "dagger_schedule" : {
+        "type": "linear",
+        "initial": 0.0,
+        "final": 1.0,
+        "num_steps": 300,
+        # "update_frequency": 10000,
+        "update_frequency": 20,
+    },
     "training": {
         "learning_rate": 0.001,
         # "batch_size": 32,
         "batch_size": 8,
         # "sequence_length": 80,
         "sequence_length": 40,
-        # "update_frequency": 10000,
-        "update_frequency": 10,
         # "collection_multiplier": 5,
         "collection_multiplier": 3,
-        # "total_steps": 10000,
-        "total_steps": 300,
+        # "total_steps": 1000000,
+        "total_steps": 500,
         # "save_frequency": 20000,
-        "save_frequency": 10,
+        "save_frequency": 50,
         # "evaluation_frequency": 400,
         "evaluation_frequency": 30,
         # "evaluation_size": 30000,

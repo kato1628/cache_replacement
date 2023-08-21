@@ -20,13 +20,13 @@ def main():
     # Create tensorboard writer
     # tb_writer = create_tb_writer(experiment_dir)
 
-    update_frequency = config["training"]["update_frequency"]
+    update_frequency = config["dagger_schedule"]["update_frequency"]
     batch_size = config["training"]["batch_size"]
     collection_multiplier = config["training"]["collection_multiplier"]
     max_examples = (update_frequency * batch_size * collection_multiplier)
 
-    # Create training datasets generator
-    training_datasets = train_data_generator(config["dataset"], max_examples)
+    # Create dagger schedule
+    dagger_schedule = schedule_from_config(config["dagger_schedule"])
 
     # Process everything on GPU if available
     device = torch.device("cpu")
@@ -43,8 +43,17 @@ def main():
     step = 0
     get_step = lambda: step
     total_steps = config["training"]["total_steps"]
+    
+    # Create a datetime string for saving models
+    current_datetime =  datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
     with tqdm.tqdm(total=total_steps) as pbar:
+        # Create training datasets generator
+        training_datasets = train_data_generator(config["dataset"],
+                                                dagger_schedule,
+                                                get_step,
+                                                model,
+                                                max_examples)
         # Train the model
         for dataset, cache_hit_rates in training_datasets:
 
@@ -66,7 +75,8 @@ def main():
 
                 # Save model
                 if step % config["training"]["save_frequency"] == 0 and step != 0:
-                    save_path = os.path.join(config["training"]["checkpoint_dir"], f"model_{step}.ckpt")
+                    save_path = os.path.join(config["training"]["checkpoint_dir"],
+                                             f"model_{current_datetime}_{step}.ckpt")
                     with open(save_path, "wb") as save_file:
                         checkpoint_buffer = io.BytesIO()
                         torch.save(model.state_dict(), checkpoint_buffer)
@@ -87,7 +97,7 @@ def main():
                     return 
 
                 # Break out of inner loop to get next dataset
-                if batch_num >= config["training"]["update_frequency"]:
+                if batch_num >= config["dagger_schedule"]["update_frequency"]:
                     break
             
 if __name__ == "__main__":

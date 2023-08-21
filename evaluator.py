@@ -24,7 +24,8 @@ def cache_hit_rate_evaluator(config, policy_model, model_checkpoint, max_example
                             config["scorer_type"],
                             None,
                             policy_model,
-                            model_checkpoint)
+                            model_checkpoint,
+                            1.0) # Always follow the model predictions
         cache = Cache(config["capacity"],
                       eviction_policy,
                       config["access_history_len"])

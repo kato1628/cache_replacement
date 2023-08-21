@@ -1,4 +1,5 @@
-from __future__ import annotations # to avoid circular import
+from __future__ import annotations
+import numpy as np # to avoid circular import
 import six
 import abc
 from typing import TYPE_CHECKING, Dict, List, Optional, TypedDict
@@ -151,21 +152,111 @@ class GreedyEvictionPolicy(EvictionPolicy):
 
         return lines_to_evict, scores
 
+class MixturePolicy(EvictionPolicy):
+  """Foollows different policies at each timestep.
+  
+  Given
+    - N eviction policies: pi_1, ..., pi_N and
+    - N probabilities(weights): p_1, ..., p_N with sum(p_i) = 1)
+    
+  At each timestep:
+    Acts according to policy pi_i with probability p_i.
+  """
+
+  def __init__(self,policies: List[EvictionPolicy],
+               weights: Optional[List[float]] = None,
+               seed: int = 0, scoring_policy_index: Optional[int] = None) -> None:
+      """Constructs a mixture policy from a list of policies and weights.
+      
+      Args:
+        policies: the list of policies to use, pi_1, ..., pi_N.
+        weights: the weights to use for each policy. If None, all policies are weighted equally.
+        seed: the random seed to use for sampling.
+        scoring_policy_index: policy always returns the scores according to policies[scoring_policy_index]
+           , even if that policy was not used to choose a cache line to evict. If None, uses the same policy
+           for choosing a line to evict and scores.
+      """
+      super().__init__()
+      
+      if weights is None:
+          weights = [1.0 / len(policies)] * len(policies)
+      
+      if len(policies) != len(weights):
+          raise ValueError(f"Need the same number of weights ({len(weights)}) as policies ({len(policies)})")
+      
+      if not np.isclose(sum(weights), 1.0):
+          raise ValueError(f"Weights must sum to 1, but sum(weights) = {sum(weights)}")
+      
+      if scoring_policy_index is not None and not (0 <= scoring_policy_index < len(policies)):
+          raise ValueError(f"scoring_policy_index must be in [0, {len(policies)}), but got {scoring_policy_index}")
+      
+      self._policies = policies
+      self._weights = weights
+      self._random = np.random.RandomState(seed)
+      self._scoring_policy_index = scoring_policy_index
+  
+  def __call__(self, cache_state: CacheState, access_times: Dict[int, int]) -> tuple[List[Optional[int]], CacheLineScores]:
+      policy = self._random.choice(self._policies, p=self._weights)
+      lines_to_evict, scores = policy(cache_state, access_times)
+ 
+      # Over write scores if we are using a different policy for scoring
+      if self._scoring_policy_index is not None:
+          scoring_policy = self._policies[self._scoring_policy_index]
+          _, scores = scoring_policy(cache_state, access_times)
+      
+      return lines_to_evict, scores
+
 def generate_eviction_policy(scorer_type: str, 
                              trace: WikiTrace,
                              learned_policy=None,
-                             model_checkpoint: str=None) -> EvictionPolicy:
+                             model_checkpoint: Optional[str]=None,
+                             model_prob: Optional[List[float]]=None,
+                             scoring_policy_index: Optional[int]=None) -> EvictionPolicy:
+    """Generates an eviction policy from the given scorer type.
+    
+    Args:
+      scorer_type: the type of scorer to use. One of "belady", "lru", "learned", "mixture".
+      trace: the trace to use for the belady scorer.
+      learned_policy: the learned policy to use for the learned scorer.
+      model_checkpoint: the checkpoint to load the learned policy from.
+      model_prob: the probability to use the learned policy for the mixture scorer.
+      scoring_policy_index: the index of the policy to use for scoring. Only used for the mixture scorer.
+
+    Returns:
+      An eviction policy.
+    """
     if scorer_type == "belady":
         return GreedyEvictionPolicy(BeladyScorer(trace))
     elif scorer_type == "lru":
         return GreedyEvictionPolicy(LRUScorer())
     elif scorer_type == "learned":
-        if learned_policy is not None:
-            scorer = LearnedScorer(learned_policy)
-        elif model_checkpoint is not None:
-            scorer = LearnedScorer.from_model_checkpoint(config["model"], model_checkpoint)
-        else:
-            raise ValueError("Must provide either a learned policy or a model checkpoint")
-        return GreedyEvictionPolicy(scorer)
+        return generate_eviction_policy_from_learned_model(learned_policy, model_checkpoint)
+    elif scorer_type == "mixture":
+        oracle_policy = GreedyEvictionPolicy(BeladyScorer(trace))
+        learned_policy = generate_eviction_policy_from_learned_model(learned_policy, model_checkpoint)
+        return MixturePolicy([oracle_policy, learned_policy],
+                              [1-model_prob, model_prob],
+                              scoring_policy_index=scoring_policy_index)
     else:
         raise ValueError("Unknown scorer: {}".format(scorer_type))
+    
+def generate_eviction_policy_from_learned_model(learned_policy,
+                                                model_checkpoint: Optional[str]=None,) -> EvictionPolicy:
+    """Generates an eviction policy from a given learned policy.
+    
+    Args:
+      learned_policy: the learned policy to use.
+      model_checkpoint: the checkpoint to load the learned policy from.
+    
+    Returns:
+      An eviction policy.
+    """
+    
+    if learned_policy is not None:
+        scorer = LearnedScorer(learned_policy)
+    elif model_checkpoint is not None:
+        scorer = LearnedScorer.from_model_checkpoint(config["model"], model_checkpoint)
+    else:
+        raise ValueError("Must provide either a learned policy or a model checkpoint")
+    
+    return GreedyEvictionPolicy(scorer)
