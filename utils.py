@@ -91,12 +91,12 @@ def as_batches(parallel_data: List[List[object]],
         # (batch_size, sequence_length)
         yield batch
 
-def save_pickle(pikle_file_path, result):
-    """Saves result to pikle_file_path.
+def save_pickle(content, pickle_file_path):
+    """Saves content to pickle_file_path.
     
     Args:
-        pikle_file_path (str): path to save the result to.
-        result (object): object to save.
+        content (object): object to save.
+        pickle_file_path (str): path to save the content to.
     
     Raises:
         ValueError: if the file already exists.
@@ -105,11 +105,12 @@ def save_pickle(pikle_file_path, result):
         None
     """
 
-    if os.path.exists(pikle_file_path):
-        raise ValueError(f"File already exists: {pikle_file_path}")
+    if os.path.exists(pickle_file_path):
+        raise ValueError(f"File already exists: {pickle_file_path}")
     
-    with open(pikle_file_path,"wb") as f:
-        pickle.dump(result, f)
+    print("Saving pickle file: ", pickle_file_path)
+    with open(pickle_file_path,"wb") as f:
+        pickle.dump(content, f)
 
 def load_pickle(pickle_file_path):
     """Loads a pickle file.
@@ -123,7 +124,8 @@ def load_pickle(pickle_file_path):
     Returns:
         object: the object loaded from the pickle file.
     """
-    if not os.path.exists(pickle_file_path):
+    if os.path.exists(pickle_file_path):
+        print("Loading pickle file: ", pickle_file_path)
         with open(pickle_file_path, "rb") as f:
             return pickle.load(f)
     else:
