@@ -5,7 +5,7 @@ from cache import Cache, CacheAccess, EvictionEntry
 from eviction_policy import generate_eviction_policy
 
 
-def train_data_generator(config: Dict, max_examples: int) -> tuple[List[EvictionEntry], List[float]]:
+def train_data_generator(config: Dict, schedule, get_step, policy_model, max_examples: int) -> tuple[List[EvictionEntry], List[float]]:
     """
     Generates training data from the trace file.
 
@@ -16,6 +16,11 @@ def train_data_generator(config: Dict, max_examples: int) -> tuple[List[Eviction
             capacity (int): the cache capacity (byte).
             access_history_len (int): the length of the access history.
             max_examples (int): the maximum number of examples to generate.
+        schedule: A function that takes a step number and returns a portion of
+            time to follow model predictions.
+        get_step: A function that returns the current step number.
+        policy_model: A learned policy model to use for generating a eviction policy.
+        max_examples: The maximum number of examples to generate.
     
     Yields:
         A tuple of (train_data, cache_hit_rates), where train_data is a list of
@@ -23,20 +28,26 @@ def train_data_generator(config: Dict, max_examples: int) -> tuple[List[Eviction
         for each example.
     """
     with WikiTrace(config["filepath"], max_look_ahead=config["window_size"]) as trace:
-        eviction_policy = generate_eviction_policy(
-                            config["scorer_type"],
-                            trace,
-                            None)
-        cache = Cache(config["capacity"], eviction_policy, config["access_history_len"])
+        # This eviction policy is not actually used and immediately overwritten
+        # but needs to be set to initialize the cache
+        policy = generate_eviction_policy("belady", trace)
+        cache = Cache(config["capacity"], policy, config["access_history_len"])
 
-        desc = "Generating training data..."
-        with tqdm.tqdm(desc=desc) as pbar:
+        print("Generating training data...")
+
+        with tqdm.tqdm() as pbar:
             while not trace.done():
                 train_data = []
                 cache_hit_rates = []
 
                 # Reset the cache hit rate statistic
                 cache.hit_rate_statistic.reset()
+                # Get the current model probability from the schedule
+                model_prob = schedule.value(get_step())
+                # Reset the cache policy according to the model probability
+                eviction_policy = generate_eviction_policy(config["scorer_type"],
+                                                        trace, policy_model, None, model_prob)
+                cache.set_eviction_policy(eviction_policy)
 
                 while len(train_data) <= max_examples and not trace.done():
                     time, obj_id, obj_size, obj_type = trace.next()

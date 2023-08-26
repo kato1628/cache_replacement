@@ -1,6 +1,7 @@
 dataset
 result
 experiments
+./baselines
 __pycache__
 .DS_Store
 .tmp*

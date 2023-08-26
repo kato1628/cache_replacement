@@ -100,6 +100,14 @@ class Cache(object):
         # Used to order access times
         self._read_counter = 0
 
+    def set_eviction_policy(self, eviction_policy: EvictionPolicy):
+        """Sets a eviction policy
+
+        Args:
+          - eviction_policy: A policy to evict a cache line
+        """
+        self._eviction_policy = eviction_policy
+
     def read(self, access: CacheAccess) -> EvictionEntry:
         """Constructs.
 
