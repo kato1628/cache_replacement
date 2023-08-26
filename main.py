@@ -1,3 +1,4 @@
+import datetime
 import io
 import os
 import numpy as np
@@ -5,8 +6,9 @@ import torch
 import torch.optim as optim
 import tqdm
 from cache_tensorboard import log_hit_rates
+from common.utils import create_directory
 from evaluator import cache_hit_rate_evaluator
-from utils import as_batches
+from utils import as_batches, save_pickle
 from cache_policy_model import CachePolicyModel
 from configuration import config
 from generator import train_data_generator
@@ -25,7 +27,7 @@ def main():
     # Create experiment directory
     # experiment_dir = os.path.join(config["experiment"]["base_dir"],
     #                               config["experiment"]["name"])
-    # create_experiment_directory(experiment_dir, overwrite=True)
+    # create_directory(experiment_dir, overwrite=True)
 
     # Create tensorboard writer
     # tb_writer = create_tb_writer(experiment_dir)
@@ -57,6 +59,14 @@ def main():
     # Create a datetime string for saving models
     current_datetime =  datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
+    # Create the checkpoint directory
+    checkpoint_dir = os.path.join(config["training"]["checkpoint_dir"], current_datetime)
+    create_directory(checkpoint_dir)
+
+    # Save the configuration
+    config_save_path = os.path.join(checkpoint_dir, "config.pkl")
+    save_pickle(config, config_save_path)
+
     with tqdm.tqdm(total=total_steps) as pbar:
         # Create training datasets generator
         training_datasets = train_data_generator(config["dataset"],
@@ -76,7 +86,7 @@ def main():
 
             # Generate batches from dataset
             for batch_num, batch in enumerate(as_batches([dataset], batch_size, sequence_length)):
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 loss = model.loss(batch, warmup_period)
                 loss.backward()
                 optimizer.step()
@@ -85,8 +95,7 @@ def main():
 
                 # Save model
                 if step % config["training"]["save_frequency"] == 0 and step != 0:
-                    save_path = os.path.join(config["training"]["checkpoint_dir"],
-                                             f"model_{current_datetime}_{step}.ckpt")
+                    save_path = os.path.join(checkpoint_dir, f"model_{step}.ckpt")
                     with open(save_path, "wb") as save_file:
                         checkpoint_buffer = io.BytesIO()
                         torch.save(model.state_dict(), checkpoint_buffer)
@@ -94,13 +103,13 @@ def main():
                         save_file.write(checkpoint_buffer.getvalue())
 
                 # Evaluate model
-                if step % config["training"]["evaluation_frequency"] == 0 and step != 0:
-                    hit_rates = next(cache_hit_rate_evaluator(config["dataset"],
-                                                            model,
-                                                            None,
-                                                            config["training"]["evaluation_size"]))
-                    print(f"Hit rates: {np.mean(hit_rates)}, step: {step}")
-                    log_hit_rates("cache_hit_rates/train", hit_rates, get_step())
+                # if step % config["training"]["evaluation_frequency"] == 0 and step != 0:
+                #     hit_rates = next(cache_hit_rate_evaluator(config["dataset"],
+                #                                             model,
+                #                                             None,
+                #                                             config["training"]["evaluation_size"]))
+                #     print(f"Hit rates: {np.mean(hit_rates)}, step: {step}")
+                #     log_hit_rates("cache_hit_rates/train", hit_rates, get_step())
 
                 # Break if the step counter exceeds the total number of steps
                 if step >= total_steps:
