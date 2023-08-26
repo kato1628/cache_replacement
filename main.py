@@ -10,6 +10,16 @@ from utils import as_batches
 from cache_policy_model import CachePolicyModel
 from configuration import config
 from generator import train_data_generator
+from baselines.common import schedules
+
+def schedule_from_config(config):
+    """Create a schedule from a configuration dictionary."""
+    if config["type"] == "linear":
+        return schedules.LinearSchedule(config["num_steps"], config["final"], config["initial"])
+    elif config["type"] == "constant":
+        return schedules.ConstantSchedule(config["value"])
+    else:
+        raise ValueError(f"Unknown schedule type: {config['type']}")
 
 def main():
     # Create experiment directory
