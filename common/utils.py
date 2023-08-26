@@ -1,8 +1,8 @@
 import os
 import shutil
 
-def create_experiment_directory(path: str, overwrite=False):
-    print(f"Experiment directory: {path}")
+def create_directory(path: str, overwrite=False):
+    print(f"Creating directory: {path}")
 
     if os.path.exists(path):
         if overwrite:

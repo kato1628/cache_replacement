@@ -33,8 +33,9 @@ def train_data_generator(config: Dict, schedule, get_step, policy_model, max_exa
         policy = generate_eviction_policy("belady", trace)
         cache = Cache(config["capacity"], policy, config["access_history_len"])
 
-        desc = "Generating training data..."
-        with tqdm.tqdm(desc=desc) as pbar:
+        print("Generating training data...")
+
+        with tqdm.tqdm() as pbar:
             while not trace.done():
                 train_data = []
                 cache_hit_rates = []
