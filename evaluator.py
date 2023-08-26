@@ -126,6 +126,21 @@ def measure_chr_by_checkpoints(eval_config: Dict, checkpoints: List[str], save_p
 
     return map_checkpoint_to_chr
 
+def evaluate_checkpoint(checkpoint, eval_config: Dict) -> Tuple[str, List[float]]:
+    """Evaluate the given checkpoint.
+    
+    Args:
+        checkpoint (str): The checkpoint to evaluate.
+        eval_config (Dict): The evaluation configuration.
+    
+    Returns:
+        Tuple[str, List[float]]: A tuple of checkpoint and a list of cache hit rates.
+    """
+    print(f"Checkpoint: {checkpoint}")
+    evaluator = cache_hit_rate_evaluator(eval_config, None, checkpoint, max_examples=5000)
+    result = [np.mean(rates) for rates in evaluator]
+    return checkpoint, result
+
 def measure_chr_by_checkpoints_with_multi_process(eval_config: Dict, checkpoints: List[str], save_path: str = None) -> Dict[str, List[float]]:
     """Measure the cache hit rate by checkpoints with multi-process. The result is saved to the given path.
     
@@ -137,21 +152,6 @@ def measure_chr_by_checkpoints_with_multi_process(eval_config: Dict, checkpoints
     Returns:
         Dict[str, List[float]]: A dictionary mapping from checkpoint to a list of cache hit rates.
     """
-    
-    def evaluate_checkpoint(checkpoint, eval_config: Dict) -> Tuple[str, List[float]]:
-        """Evaluate the given checkpoint.
-        
-        Args:
-            checkpoint (str): The checkpoint to evaluate.
-            eval_config (Dict): The evaluation configuration.
-        
-        Returns:
-            Tuple[str, List[float]]: A tuple of checkpoint and a list of cache hit rates.
-        """
-        print(f"Checkpoint: {checkpoint}")
-        evaluator = cache_hit_rate_evaluator(eval_config, None, checkpoint, max_examples=5000)
-        result = [np.mean(rates) for rates in evaluator]
-        return checkpoint, result
 
     print("Measuring cache hit rate by checkpoints with multi-process...")
     map_checkpoint_to_chr = {}
@@ -179,7 +179,6 @@ def evaluate(experiment_id: str, multi_process: bool = False, benchmarking: bool
         benchmarking (bool, optional): Whether to do benchmarking. Defaults to True.
     """
     checkpoint_path_prefix = os.path.join('./result/checkpoints', experiment_id)
-    checkpoints_paths = [os.path.join(checkpoint_path_prefix, f"model_{x}.ckpt") for x in range(80, 801, 80)]
     config_path = os.path.join(checkpoint_path_prefix, "config.pkl")
     result_path = os.path.join(checkpoint_path_prefix, "result.pkl")
 
@@ -188,6 +187,12 @@ def evaluate(experiment_id: str, multi_process: bool = False, benchmarking: bool
     pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(config)
     pp.pprint(eval_config)
+    
+    # collect checkpoints
+    start = config["training"]["save_frequency"]
+    end = config["training"]["total_steps"] + 1
+    step = start
+    checkpoints_paths = [os.path.join(checkpoint_path_prefix, f"model_{x}.ckpt") for x in range(start, end, step)]
 
     # Save evaluation config
     eval_config_path = os.path.join(checkpoint_path_prefix, "eval_config.pkl")
@@ -283,5 +288,5 @@ def show_graph(experiment_id: str, show_benchmark: bool = True):
     plot_hit_rates(result)
 
 if __name__ == "__main__":
-    experiment_id = "20230825145301"
+    experiment_id = "20230826151712"
     evaluate(experiment_id, multi_process=True, benchmarking=True, show_result=True)
