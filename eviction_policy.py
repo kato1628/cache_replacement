@@ -94,13 +94,14 @@ class LearnedScorer(CacheLineScorer):
       return {line: -scores[0, i].item() for i, line in enumerate(cache_state.cache_lines)}      
 
     @classmethod
-    def from_model_checkpoint(self, config: Dict, model_checkpoint: Optional[str] = None) -> CacheLineScorer:
+    def from_model_checkpoint(self, config: Dict, model_checkpoint: Optional[str] = None, eval: bool = False) -> CacheLineScorer:
       """Creates scorer from a model loaded from the given checkpoint and config.
       
       Arg:
         config: the config to use for the model.
         model_checkpoint (str | None): path to acheckpoint for the model. Model uses default random
           initialization if no checkpoint is provided.
+        eval (bool): whether to put the model in eval mode.
       
       Returns:
         scorer(CacheLineScorer) : the scorer using the given model.
@@ -115,9 +116,14 @@ class LearnedScorer(CacheLineScorer):
       if model_checkpoint:
          with open(model_checkpoint, "rb") as f:
             scoring_model.load_state_dict(torch.load(f, map_location=device))
+      else:
+          print("WARNING: No model checkpoint provided, using default random initialization")
+
+      if eval:
+          print("Putting model in eval mode")
+          scoring_model.eval()
 
       return self(scoring_model)
-        
 
 
 class EvictionPolicy(six.with_metaclass(abc.ABCMeta, object)):
@@ -251,7 +257,7 @@ def generate_eviction_policy(scorer_type: str,
     elif scorer_type == "random":
         return RandomPolicy()
     elif scorer_type == "learned":
-        return generate_eviction_policy_from_learned_model(learned_policy, model_checkpoint)
+        return generate_eviction_policy_from_learned_model(learned_policy, model_checkpoint, eval=True)
     elif scorer_type == "mixture":
         oracle_policy = GreedyEvictionPolicy(BeladyScorer(trace))
         learned_policy = generate_eviction_policy_from_learned_model(learned_policy, model_checkpoint)
@@ -262,21 +268,26 @@ def generate_eviction_policy(scorer_type: str,
         raise ValueError("Unknown scorer: {}".format(scorer_type))
     
 def generate_eviction_policy_from_learned_model(learned_policy,
-                                                model_checkpoint: Optional[str]=None,) -> EvictionPolicy:
+                                                model_checkpoint: Optional[str]=None,
+                                                eval: bool = False) -> EvictionPolicy:
     """Generates an eviction policy from a given learned policy.
     
     Args:
       learned_policy: the learned policy to use.
       model_checkpoint: the checkpoint to load the learned policy from.
+      eval: whether to put the model in eval mode.
     
     Returns:
       An eviction policy.
     """
     
     if learned_policy is not None:
+        if eval:
+            print("Putting model in eval mode")
+            learned_policy.eval()
         scorer = LearnedScorer(learned_policy)
     elif model_checkpoint is not None:
-        scorer = LearnedScorer.from_model_checkpoint(config["model"], model_checkpoint)
+        scorer = LearnedScorer.from_model_checkpoint(config["model"], model_checkpoint, eval=eval)
     else:
         raise ValueError("Must provide either a learned policy or a model checkpoint")
     
