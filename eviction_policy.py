@@ -152,6 +152,25 @@ class GreedyEvictionPolicy(EvictionPolicy):
 
         return lines_to_evict, scores
 
+class RandomPolicy(EvictionPolicy):
+    """Randomly chooses a cache line to evict."""
+
+    def __init__(self, seed: int = 0) -> None:
+      super().__init__()
+      self._random = np.random.RandomState(seed)
+
+    def __call__(self, cache_state: CacheState, access_times: Dict[int, int]) -> tuple[List[Optional[int]], CacheLineScores]:
+      del access_times
+
+      scores = {line: self._random.random() for line in cache_state.cache_lines}
+      if not scores:
+         return None, scores 
+
+      lines_to_evict = sorted(scores.keys(), key=lambda line: scores[line]) 
+
+      return lines_to_evict, scores
+
+
 class MixturePolicy(EvictionPolicy):
   """Foollows different policies at each timestep.
   
@@ -229,6 +248,8 @@ def generate_eviction_policy(scorer_type: str,
         return GreedyEvictionPolicy(BeladyScorer(trace))
     elif scorer_type == "lru":
         return GreedyEvictionPolicy(LRUScorer())
+    elif scorer_type == "random":
+        return RandomPolicy()
     elif scorer_type == "learned":
         return generate_eviction_policy_from_learned_model(learned_policy, model_checkpoint)
     elif scorer_type == "mixture":
