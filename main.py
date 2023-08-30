@@ -8,7 +8,7 @@ import torch.optim as optim
 import tqdm
 from cache_tensorboard import log_hit_rates, log_scalar
 from common.utils import create_directory
-from evaluator import cache_hit_rate_evaluator
+from evaluator import cache_hit_rate_evaluator, evaluate
 from utils import as_batches, save_pickle
 from cache_policy_model import CachePolicyModel
 from configuration import config
@@ -91,7 +91,7 @@ def main():
 
             # Generate batches from dataset
             for batch_num, batch in enumerate(as_batches([dataset], batch_size, sequence_length)):
-                optimizer.zero_grad(set_to_none=True)
+                optimizer.zero_grad()
                 loss = model.loss(batch, warmup_period)
                 loss.backward()
                 optimizer.step()
@@ -129,6 +129,9 @@ def main():
                 # Break out of inner loop to get next dataset
                 if batch_num >= config["dagger_schedule"]["update_frequency"]:
                     break
-            
+    
+    # evaluate model
+    evaluate(experiment_id, multi_process=True)
+
 if __name__ == "__main__":
     main()
