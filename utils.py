@@ -91,7 +91,7 @@ def as_batches(parallel_data: List[List[object]],
         # (batch_size, sequence_length)
         yield batch
 
-def save_pickle(content, pickle_file_path):
+def save_pickle(content, pickle_file_path, overwrite=False):
     """Saves content to pickle_file_path.
     
     Args:
@@ -105,7 +105,7 @@ def save_pickle(content, pickle_file_path):
         None
     """
 
-    if os.path.exists(pickle_file_path):
+    if not overwrite and os.path.exists(pickle_file_path):
         raise ValueError(f"File already exists: {pickle_file_path}")
     
     print("Saving pickle file: ", pickle_file_path)

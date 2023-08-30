@@ -45,8 +45,8 @@ def train_data_generator(config: Dict, schedule, get_step, policy_model, max_exa
                 # Get the current model probability from the schedule
                 model_prob = schedule.value(get_step())
                 # Reset the cache policy according to the model probability
-                eviction_policy = generate_eviction_policy(config["scorer_type"],
-                                                        trace, policy_model, None, model_prob)
+                eviction_policy = generate_eviction_policy(config["scorer_type"], trace,
+                                                           policy_model, None, model_prob)
                 cache.set_eviction_policy(eviction_policy)
 
                 while len(train_data) <= max_examples and not trace.done():
