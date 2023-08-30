@@ -224,6 +224,7 @@ class CachePolicyModel(nn.Module):
                     [self._log(entry[i].cache_decision.cache_line_scores[line])
                        for line in entry[i].cache_state.cache_lines])
             log_reuse_distances, mask = pad(log_reuse_distances)
+            # log_reuse_distances = torch.tensor(log_reuse_distances, dtype=torch.float32).float()
             log_reuse_distances = torch.tensor(log_reuse_distances).float()
 
             # Compute the loss
@@ -266,7 +267,7 @@ class CachePolicyModel(nn.Module):
         Returns:
             log_score: the log of the score.
         """
-        upper_bound = 5.
+        upper_bound = 8.
         if score == -np.inf:
             return upper_bound
         return min(upper_bound, np.log10(-score))
