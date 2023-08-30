@@ -49,6 +49,10 @@ def main():
     if torch.cuda.is_available():
         torch.set_default_tensor_type(torch.cuda.FloatTensor)
         device = torch.device("cuda:0")
+    # elif torch.backends.mps.is_available():
+    #     device = torch.device("mps")
+    #     torch.set_default_device(device)
+
     print("Device:", device)
 
     # Initialize the model and optimizer
