@@ -5,7 +5,7 @@ The simulation uses The Wikipedia CDN trace dataset in 2018 and 2019 provided by
 
 ## ML architecture
 The model architecture is based on the attention mechanism.
-<img src="https://github.com/kato1628/cache_replacement/assets/1551828/eb02b817-bd18-4941-a353-211f3244f81c" alt="drawing" style="width:600px;"/>
+<img src="https://github.com/kato1628/cache_replacement/assets/1551828/bfa03b69-ceaf-45c3-a78e-77a5248aa332" alt="drawing" style="width:600px;"/>
 
 ## Training model
 
