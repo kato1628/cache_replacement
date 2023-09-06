@@ -190,12 +190,15 @@ def evaluate(experiment_id: str, multi_process: bool = False, benchmarking: bool
         benchmarking (bool, optional): Whether to do benchmarking. Defaults to True.
         show_result (bool, optional): Whether to show the result. Defaults to True.
     """
+    print(f"Evaluate experiment id: {experiment_id}")
+    pp = pprint.PrettyPrinter(indent=2)
+    pp.pprint(eval_config)
+
     checkpoint_path_prefix = os.path.join("./result/checkpoints", experiment_id)
     config_path = os.path.join(checkpoint_path_prefix, "config.pkl")
 
     # load config
     config = load_pickle(config_path)
-    pp = pprint.PrettyPrinter(indent=2)
     pp.pprint(config)
 
     eval_filename = eval_config['filepath'].split("/")[2].split(".")[0]
