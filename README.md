@@ -60,7 +60,7 @@ Load the trained model from checkpoint files, and evaluate cache hit rates on th
 python evaluate.py
 ```
 
-![graph](https://raw.githubusercontent.com/kato1628/cache_replacement/feature/license/image/cache_hit_rates_in_different_policies_larger_capacity.png?token=GHSAT0AAAAAACDKWWKOFR4CJBRWFJDTJZLQZHYLQFQ)
+![graph](image/cache_hit_rates_in_different_policies_larger_capacity.png)
 
 ## External Code and Licenses
 
