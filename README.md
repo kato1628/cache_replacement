@@ -1,7 +1,7 @@
 This project is inspired by [PARROT](https://github.com/google-research/google-research/tree/master/cache_replacement) by Google Research, simulating and evaluating the model on the Wikipedia CDN trace.
 
 ## Dataset
-The simulation uses The Wikipedia CDN trace dataset in 2018 and 2019 provided by [Evan et al](https://www.usenix.org/conference/nsdi20/accepted-papers), which is collected with the support of the Wikimedia Foundation and is publicly released on [sunnyszy/lrb](https://github.com/sunnyszy/lrb).
+The simulation uses The Wikipedia CDN trace dataset in 2018 and 2019 provided by [Evan et al](https://www.usenix.org/conference/nsdi20/presentation/song), which is collected with the support of the Wikimedia Foundation and is publicly released on [sunnyszy/lrb](https://github.com/sunnyszy/lrb).
 
 ## ML architecture
 The model architecture is based on the attention mechanism.
